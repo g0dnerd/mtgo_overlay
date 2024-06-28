@@ -13,7 +13,7 @@ from pystray import Icon, MenuItem, Menu
 from PIL import Image
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
-import image_recognition.logs as logs
+import crawler.logs as logs
 import image_recognition.rec as rc
 from capture.screen_capture import capture_mtgo
 from crawler.fetch import get_card_ratings
