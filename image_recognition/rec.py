@@ -1,10 +1,10 @@
+import logging
+import sys
 import numpy as np
-import matplotlib.pyplot as plt
 import cv2
 import crawler.fetch
-import capture.screen_capture as sc
+from data.resources import resource_path
 import image_recognition.preprocessing as pre
-import crawler.ratings as rt
 
 def initialize_sift():
     # Create SIFT object
@@ -33,38 +33,6 @@ def match_features(des1, des2):
         if m.distance < 0.7 * n.distance:
             good_matches.append(m)
     return good_matches
-
-def draw_matches(screen, boxes, found):
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.4
-    font_color = (255, 255, 255)
-    line_type = cv2.LINE_AA
-    thickness = 1
-    outline_thickness = 3
-    display_strs = [card[0] + ' (' + str(round(card[1], 2)) + ')' for card in found]
-    ratings = rt.get_card_ratings([card[0] for card in found])
-    
-    for box, out_str, rating in zip(boxes, display_strs, ratings):
-        # Draw the box
-        cv2.polylines(screen, [np.int32(box)], True, (255, 0, 0), 3, cv2.LINE_AA)
-
-        # Put the name of the card
-        if box.shape[0] > 0:
-            text_pos = (int(box[0][0][0] + 25), int(box[0][0][1] + 25))
-            rating_pos = (text_pos[0], text_pos[1] + 25)
-            # Draw the outline by increasing the thickness and changing the color to black
-            cv2.putText(screen, out_str, text_pos, font, font_scale, (0, 0, 0), outline_thickness, line_type)
-            cv2.putText(screen, rating, rating_pos, font, font_scale, (0, 0, 0), outline_thickness, line_type)
-            
-            # Draw the main text on top
-            cv2.putText(screen, out_str, text_pos, font, font_scale, font_color, thickness, line_type)
-            cv2.putText(screen, rating, rating_pos, font, font_scale, font_color, thickness, line_type)
-    
-    # Display the image
-    plt.figure(figsize=(10, 8))
-    plt.imshow(cv2.cvtColor(screen, cv2.COLOR_BGR2RGB))
-    plt.title('Detected Cards on Screen')
-    plt.show()
     
 def find_homography_draw_box(kp1, kp2, matches, card_shape):
 
@@ -85,7 +53,7 @@ def find_homography_draw_box(kp1, kp2, matches, card_shape):
         total_matches = len(matchesMask)  # Total matches
         confidence = inliers_count / total_matches  # Confidence as a percentage
 
-        if confidence > 0.62:  # Set a confidence threshold
+        if confidence > 0.59:  # Set a confidence threshold
             # Perspective transformation and draw box
             height, width = card_shape[:2]
             points = np.float32([[0, 0], [0, height-1], [width-1, height-1], [width-1, 0]]).reshape(-1, 1, 2)
@@ -108,18 +76,23 @@ def prepare_card_images(names, scale_factor, sift):
     return card_images
 
 def get_pos_and_names(screen, names: list):
+    log_path = resource_path('debug.log')
+    logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                            handlers=[
+                                logging.FileHandler(log_path),
+                                logging.StreamHandler(sys.stdout)
+                                ])
     scale_factor = 80
     sift = initialize_sift()
     boxes = []
     cards_found = []
     found_names = set()
-    # card_region = pre.detect_card_region(screen)
-    # print(screen.shape)
     card_region = (0, 0, screen.shape[1], int(screen.shape[0]//1.7))
     if not card_region:
         raise ValueError('Not card region detected.')
     screen_shot, (offset_x, offset_y) = pre.crop_image_to_region(screen, card_region)
-    # cv2.imwrite('data/test.png', screen_shot)
 
     card_images = prepare_card_images(names, scale_factor, sift)
 
@@ -127,23 +100,21 @@ def get_pos_and_names(screen, names: list):
     for name, (kp1, des1, shape) in card_images.items():
         if name in found_names:
             continue
-            
         try:
             matches = match_features(des1, des2)
         except:
-            cv2.imwrite('data/failed_flann.png', screen_shot)
-        print(f'Found {len(matches)} matches for card {name}')
+            raise ValueError(f'Feature matching failed for card {name} failed.')
+        logging.info(f'Found {len(matches)} matches for card {name}')
         pts, confidence = find_homography_draw_box(kp1, kp2, matches, shape)
 
-        if confidence > 0.62:
-            print(f'Found card {name} on screen with a confidence of {confidence}!')
+        if confidence > 0.59:
+            logging.info(f'Found card {name} on screen with a confidence of {confidence}!')
             pts = (int(pts[0][0][0] + 100), int(pts[0][0][1] + 30))
             adjusted_pts = (pts[0] + offset_x, pts[1] + offset_y)
             boxes.append(adjusted_pts)
             cards_found.append(name)
             found_names.add(name)
         else:
-            print(f'Could not find card {name} on screen (confidence {confidence})!')
-            cv2.imwrite('data/failed_rec.png', screen_shot)
+            logging.info(f'Could not find card {name} on screen (confidence {confidence})!')
 
     return boxes, cards_found

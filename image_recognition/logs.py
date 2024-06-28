@@ -1,38 +1,12 @@
-import time
 import glob
 import os
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
-# from overlay.display import update_ratings
 
-class LogFileHandler(FileSystemEventHandler):
-    def __init__(self, filename, callback):
-        self.filename = filename
-        self.callback = callback
-
-    def on_modified(self, event):
-        if event.src_path == self.filename:
-            print(f'{self.filename} has been modified.')
-            self.callback()
-
-def monitor_log_file(path: str):
-    event_handler = LogFileHandler(path, get_current_log)
-    observer = Observer()
-    observer.schedule(event_handler, path=path, recursive=False)
-    observer.start()
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        observer.stop()
-    observer.join()
-
-def get_current_log(mtgo_user: str):
-    base_path = os.path.expanduser('~')
-    logs_path = base_path + '/Documents\\'
-    all_logs = glob.glob(logs_path + f'{mtgo_user}*.txt')
+def get_current_log(base_path: str, mtgo_user: str):
+    base_path = base_path.replace('/', '\\')
+    base_path += '\\'
+    all_logs = glob.glob(base_path + f'{mtgo_user}*.txt')
     newest_log = max(all_logs, key=os.path.getctime)
-    return logs_path, newest_log
+    return base_path, newest_log
 
 def get_newest_pack(path_to_log: str):
     """Parses an MTGO log file and outputs the card names from the newest pack in a list.
@@ -72,3 +46,11 @@ def get_newest_pack(path_to_log: str):
         return packs.pop()
     else:
         raise ValueError('Unable to parse draft log for pack.')
+
+def is_valid_draft(event_path, log_path, user):
+    if not os.path.dirname(event_path) == os.path.dirname(log_path):
+        return False
+    
+    if user in event_path:
+        return True
+    return False

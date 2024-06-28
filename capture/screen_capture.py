@@ -4,9 +4,9 @@ import cv2
 import numpy as np
 
 def get_mtgo_window():
-    windows = gw.getWindowsWithTitle('Magic: The Gathering Online')
+    windows = gw.getWindowsWithTitle('Draft League')
     if not windows:
-        windows = gw.getWindowsWithTitle('Draft League')
+        windows = gw.getWindowsWithTitle('Magic: The Gathering Online')
     return windows[0] if windows else None
 
 def capture_mtgo():
@@ -23,7 +23,6 @@ def capture_mtgo():
 
             img = np.array(screenshot)
             cv2_img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-            # cv2.imshow('screengrab', cv2_img)
             return cv2_img, mtgo_window
     else:
         raise ValueError('No MTGO window found.')

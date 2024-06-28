@@ -1,16 +1,12 @@
-"""Test"""
-
 import os
-import cv2
-import crawler.fetch
-import crawler.card_names
+from crawler.fetch import update_bulk_data, resource_path
 import overlay.display as dp
-from image_recognition.preprocessing import crop_image_to_region
-from capture.screen_capture import capture_mtgo
 
 def main():
-    if not os.path.isfile('data/bulk_data.json'):
-        crawler.fetch.update_bulk_data()
+    bulk_path = 'bulk_data.json'
+    bulk_path = resource_path(bulk_path)
+    if not os.path.isfile(bulk_path):
+        update_bulk_data()
         
     dp.RatingOverlay()
 
