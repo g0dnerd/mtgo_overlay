@@ -30,7 +30,8 @@ from PySide6.QtWidgets import QApplication
 
 from .capture.screen_capture import capture_client_area
 from .config.settings import Settings
-from .data import sets
+from .data import expansions, sets
+from .data.expansions import SupportedSets
 from .data.ratings_repo import CardRating, RatingsRepository
 from .data.seventeenlands import SeventeenLandsClient
 from .draft.log_parser import Log
@@ -46,9 +47,6 @@ from .system import logging_setup, paths, win32
 _log = logging_setup.get_logger("app")
 
 PICKS_PER_DRAFT = 42
-
-# Sets the tray's manual "download set artwork" action offers. Extend as needed.
-PREFETCHABLE_SETS: tuple[str, ...] = ("MSH",)
 
 
 # --- pure helpers (unit-tested) --------------------------------------------
@@ -208,14 +206,18 @@ class _EnsureWorker(QRunnable):
 
 
 class _PrefetchWorker(QRunnable):
-    """Off-UI: enumerate a whole set on Scryfall and warm its artwork cache.
+    """Off-UI: enumerate a whole set on Scryfall, warm its artwork cache, and warm
+    its 17lands ratings — so the next live draft of the set runs fully offline.
 
-    Backs the tray's manual "download set artwork" action so a set is cached
-    offline before the first draft (the live path only warms per-pack)."""
+    Backs the tray's manual "Download set…" action (the live path only warms
+    per-pack). Ratings are best-effort: a 17lands hiccup never fails the slow,
+    valuable art download."""
 
-    def __init__(self, expansion, on_done):
+    def __init__(self, expansion, fmt, repo, on_done):
         super().__init__()
         self.expansion = expansion
+        self.fmt = fmt
+        self.repo = repo
         self.signals = _WorkerSignals()
         self.signals.labelsReady.connect(on_done)
 
@@ -231,14 +233,46 @@ class _PrefetchWorker(QRunnable):
             scryfall_art.ensure_set_artwork(
                 self.expansion, names, paths.scryfall_cache_dir()
             )
-            self.signals.labelsReady.emit(
-                {"expansion": self.expansion, "count": len(names), "ok": True}
-            )
         except Exception as exc:  # noqa: BLE001 - worker boundary
             _log.warning("Set artwork download failed for %s: %s", self.expansion, exc)
             self.signals.labelsReady.emit(
                 {"expansion": self.expansion, "ok": False, "error": str(exc)}
             )
+            return
+        ratings_ok = True
+        try:
+            _log.info("Warming 17lands ratings for %s/%s...", self.expansion, self.fmt)
+            self.repo.ensure(self.expansion, self.fmt, use_live=True, csv_path=None)
+        except Exception as exc:  # noqa: BLE001 - ratings is best-effort here
+            ratings_ok = False
+            _log.warning("Ratings warm failed for %s/%s: %s", self.expansion, self.fmt, exc)
+        self.signals.labelsReady.emit(
+            {
+                "expansion": self.expansion,
+                "count": len(names),
+                "ok": True,
+                "ratings_ok": ratings_ok,
+            }
+        )
+
+
+class _SupportedSetsWorker(QRunnable):
+    """Off-UI: load (cache-first) the 17lands supported-set list for the picker, so
+    the tray menu never does network on the UI thread."""
+
+    def __init__(self, supported, on_done):
+        super().__init__()
+        self.supported = supported
+        self.signals = _WorkerSignals()
+        self.signals.labelsReady.connect(on_done)
+
+    def run(self) -> None:
+        try:
+            filters = self.supported.ensure()
+        except Exception as exc:  # noqa: BLE001 - worker boundary
+            _log.warning("Supported-set list load failed: %s", exc)
+            filters = {}
+        self.signals.labelsReady.emit(filters)
 
 
 # --- controller -------------------------------------------------------------
@@ -251,6 +285,8 @@ class AppController(QObject):
         self.cfg = RecognitionConfig()
         client = SeventeenLandsClient(self.settings.user_agent)
         self.repo = RatingsRepository(paths.ratings_cache_dir(), client=client)
+        self._supported = SupportedSets(client, paths.cache_dir())
+        self._filters: dict = {}
         self.overlay = OverlayWindow(self.settings.overlay)
         self.pool = QThreadPool.globalInstance()
         self.tracker = WindowTracker(hz=10)
@@ -285,6 +321,7 @@ class AppController(QObject):
         _log.info("Overlay window shown (frameless, transparent, click-through).")
         self.tracker.start()
         _log.info("Window tracker started — polling for the MTGO window at 10 Hz.")
+        self.pool.start(_SupportedSetsWorker(self._supported, self._on_supported_sets))
         self._restart_watcher()
 
     def _log_environment(self) -> None:
@@ -514,13 +551,9 @@ class AppController(QObject):
             action.triggered.connect(slot)
             menu.addAction(action)
 
-        download_menu = menu.addMenu("Download set artwork")
-        for expansion in PREFETCHABLE_SETS:
-            action = QAction(expansion, download_menu)
-            action.triggered.connect(
-                lambda _checked=False, exp=expansion: self._prefetch_set(exp)
-            )
-            download_menu.addAction(action)
+        download_action = QAction("Download set…", menu)
+        download_action.triggered.connect(self._prompt_download_set)
+        menu.addAction(download_action)
 
         menu.addSeparator()
         exit_action = QAction("Exit", menu)
@@ -530,19 +563,44 @@ class AppController(QObject):
         self._tray.setContextMenu(menu)
         self._tray.show()
 
+    def _on_supported_sets(self, filters: dict) -> None:
+        self._filters = filters or {}
+        _log.info(
+            "Supported-set list ready (%d set(s)).",
+            len(expansions.codes_newest_first(self._filters)),
+        )
+
+    def _prompt_download_set(self) -> None:
+        from PySide6.QtWidgets import QInputDialog
+
+        codes = expansions.codes_newest_first(self._filters)
+        code, ok = QInputDialog.getItem(
+            None, "Pre-download a set", "Set:", codes, 0, True,
+        )
+        if not ok:
+            return
+        code = code.strip().upper()
+        if code:
+            self._prefetch_set(code)
+
     def _prefetch_set(self, expansion: str) -> None:
-        _log.info("Manual Scryfall artwork download requested for %s.", expansion)
+        fmt = expansions.format_for(expansion, self.settings.fmt, self._filters)
+        _log.info("Manual download requested for %s (art + %s ratings).", expansion, fmt)
         if self._tray is not None:
             self._tray.showMessage(
                 "MTGO 17lands Overlay",
-                f"Downloading {expansion} card art from Scryfall — first run can "
-                f"take a minute or two; watch the terminal/log for progress.",
+                f"Downloading {expansion} card art + ratings — first run can take a "
+                f"minute or two; watch the terminal/log for progress.",
             )
-        self.pool.start(_PrefetchWorker(expansion, self._on_prefetch_done))
+        self.pool.start(_PrefetchWorker(expansion, fmt, self.repo, self._on_prefetch_done))
 
     def _on_prefetch_done(self, result: dict) -> None:
         if result.get("ok"):
-            msg = f"{result['expansion']} artwork ready — {result['count']} card(s) cached."
+            ratings = "ratings cached" if result.get("ratings_ok") else "ratings unavailable"
+            msg = (
+                f"{result['expansion']} ready — {result['count']} card(s) art cached, "
+                f"{ratings}."
+            )
         else:
             msg = f"{result['expansion']} download failed: {result.get('error', 'see log')}"
         _log.info("%s", msg)

@@ -96,6 +96,24 @@ def test_client_rejects_non_array():
         client.fetch_ratings("mh3", "PremierDraft")
 
 
+def test_client_fetch_filters_parses():
+    payload = {"expansions": ["MH3"], "formats_by_expansion": {"MH3": ["PremierDraft"]}}
+    session = _FakeSession(_FakeResponse(payload))
+    client = SeventeenLandsClient("ua", session=session)
+
+    out = client.fetch_filters()
+
+    assert out == payload
+    assert session.calls[0]["url"].endswith("/data/filters")
+
+
+def test_client_fetch_filters_rejects_non_object():
+    session = _FakeSession(_FakeResponse(["not", "an", "object"]))
+    client = SeventeenLandsClient("ua", session=session)
+    with pytest.raises(SeventeenLandsError):
+        client.fetch_filters()
+
+
 # --- repository ------------------------------------------------------------
 
 class _StubClient:

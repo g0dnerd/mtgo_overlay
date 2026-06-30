@@ -13,6 +13,7 @@ from __future__ import annotations
 import requests
 
 BASE_URL = "https://www.17lands.com/card_ratings/data"
+FILTERS_URL = "https://www.17lands.com/data/filters"
 
 
 class SeventeenLandsError(RuntimeError):
@@ -57,6 +58,23 @@ class SeventeenLandsClient:
             raise SeventeenLandsError(f"17lands returned non-JSON: {exc}") from exc
         if not isinstance(data, list):
             raise SeventeenLandsError("17lands response was not a JSON array")
+        return data
+
+    def fetch_filters(self) -> dict:
+        """The site's filter metadata: supported ``expansions``, ``start_dates``,
+        and ``formats_by_expansion``. Same headers/error wrapping as
+        :meth:`fetch_ratings`; expects a JSON object."""
+        headers = {"User-Agent": self.user_agent, "Accept": "application/json"}
+        try:
+            resp = self._session.get(FILTERS_URL, headers=headers, timeout=self.timeout)
+            resp.raise_for_status()
+            data = resp.json()
+        except requests.RequestException as exc:
+            raise SeventeenLandsError(f"17lands filters request failed: {exc}") from exc
+        except ValueError as exc:  # json decode
+            raise SeventeenLandsError(f"17lands filters returned non-JSON: {exc}") from exc
+        if not isinstance(data, dict):
+            raise SeventeenLandsError("17lands filters response was not a JSON object")
         return data
 
     @staticmethod
