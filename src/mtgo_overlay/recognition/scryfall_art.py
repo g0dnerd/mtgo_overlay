@@ -1,10 +1,12 @@
 """Scryfall artwork enumeration + caching.
 
-Ported from the old ``crawler/fetch.py``: the cache-first image fetch, the 10
-req/s rate limit, and the ``{name: [variants]}`` model are reused. The heavyweight
-``bulk_data.json`` + hand-authored ``information.json`` enumeration is replaced by
-a direct Scryfall search (``set:<exp> !"name" unique=prints``), so it runs without
-curated per-set data and warms the cache per draft.
+A whole set is enumerated with a single paginated ``set:<exp> unique=prints``
+search (Scryfall paginates at 175/page, so ~2-4 requests cover any set) and
+indexed by card name. Set data is immutable once a set releases, so the index is
+cached indefinitely in ``<EXP>_variants.json``; after the one-time fetch every
+per-name lookup and the recognition hot path are fully offline. This deliberately
+avoids per-name searching (which scaled ~250 requests/set) — the few cheap,
+indefinitely-cached searches stay well inside Scryfall's guidance.
 
 Scryfall asks for a descriptive User-Agent and an Accept header, and enforces
 per-endpoint hard rate limits: the ``/cards/*`` search-family endpoints are
@@ -131,82 +133,124 @@ def _image_url(card: dict) -> str | None:
     return None
 
 
-def _query_scryfall_prints(expansion: str, name: str) -> list[ArtRef]:
-    """Every printing/variation of ``name`` in ``expansion`` (paginated)."""
-    front = name.split(" //", 1)[0]  # MDFCs: search the front face
+def _front_name(name: str) -> str:
+    """The front-face name of an MDFC; the name unchanged otherwise."""
+    return name.split(" //", 1)[0].strip()
+
+
+def _fetch_set_prints(expansion: str) -> dict[str, list[ArtRef]]:
+    """Every booster-eligible printing in ``expansion``, grouped by card name.
+
+    One paginated ``set:<exp> unique=prints`` search returns the whole set
+    (Scryfall paginates at 175/page, so ~2-4 requests cover any set), instead of
+    one search per card name. ``{}`` for an unknown set code.
+    """
     params: dict | None = {
-        "q": f'set:{expansion.lower()} !"{front}"',
+        "q": f"set:{expansion.lower()}",
         "unique": "prints",
         "include_variations": "true",
     }
     url = f"{SCRYFALL_API}/cards/search"
-    refs: list[ArtRef] = []
+    cards: dict[str, list[ArtRef]] = {}
     while url:
         try:
             resp = _http_get(url, params=params)
         except requests.HTTPError as exc:
             if exc.response is not None and exc.response.status_code == 404:
-                return []  # no cards match -> not in this set
+                return {}  # no cards match -> unknown set
             raise
         data = resp.json()
         for card in data.get("data", []):
             image_url = _image_url(card)
-            if image_url:
-                refs.append(ArtRef(card["id"], image_url, card.get("name", name)))
+            if not image_url:
+                continue
+            name = card.get("name", "")
+            cards.setdefault(name, []).append(ArtRef(card["id"], image_url, name))
         url = data.get("next_page") if data.get("has_more") else None
         params = None  # next_page already carries the query
-    return refs
-
-
-def enumerate_set_cards(expansion: str) -> list[str]:
-    """All distinct card names in ``expansion`` (one paginated Scryfall search).
-
-    The live hot path warms artwork per-pack from the draft log; this exists for
-    the manual "download a whole set" action, where there is no pack yet. Returns
-    ``[]`` for an unknown set code.
-    """
-    params: dict | None = {"q": f"set:{expansion.lower()}", "unique": "cards"}
-    url = f"{SCRYFALL_API}/cards/search"
-    names: list[str] = []
-    seen: set[str] = set()
-    while url:
-        try:
-            resp = _http_get(url, params=params)
-        except requests.HTTPError as exc:
-            if exc.response is not None and exc.response.status_code == 404:
-                return []
-            raise
-        data = resp.json()
-        for card in data.get("data", []):
-            name = card.get("name")
-            if name and name not in seen:
-                seen.add(name)
-                names.append(name)
-        url = data.get("next_page") if data.get("has_more") else None
-        params = None  # next_page already carries the query
-    return names
+    return cards
 
 
 def _variants_path(expansion: str, cache_dir: Path) -> Path:
     return Path(cache_dir) / f"{expansion.upper()}_variants.json"
 
 
-def _load_variants(expansion: str, cache_dir: Path) -> dict[str, list[dict]]:
+def _load_set_index(expansion: str, cache_dir: Path) -> dict[str, list[dict]] | None:
+    """The cached full-set index, or ``None`` if absent/partial/legacy.
+
+    A ``None`` return forces a refetch — only an index written by this version
+    (``{"complete": true, ...}``) is trusted as a complete set enumeration.
+    """
     path = _variants_path(expansion, cache_dir)
     if not path.exists():
-        return {}
+        return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        blob = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return {}
+        return None
+    if isinstance(blob, dict) and blob.get("complete"):
+        return blob.get("cards") or {}
+    return None
 
 
-def _save_variants(expansion: str, cache_dir: Path, data: dict) -> None:
+def _save_set_index(
+    expansion: str, cache_dir: Path, cards: dict[str, list[ArtRef]]
+) -> None:
     path = _variants_path(expansion, cache_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
+    blob = {
+        "complete": True,
+        "cards": {n: [asdict(r) for r in refs] for n, refs in cards.items()},
+    }
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data), encoding="utf-8")
+    tmp.write_text(json.dumps(blob), encoding="utf-8")
     os.replace(tmp, path)
+
+
+def set_artwork_index(
+    expansion: str, *, cache_dir: Path | None = None, refresh: bool = False
+) -> dict[str, list[ArtRef]]:
+    """The full ``{name: [ArtRef]}`` index for ``expansion`` (cache-first).
+
+    Set data is immutable once a set releases, so the index is cached
+    indefinitely in ``<EXP>_variants.json`` and the network is touched only on a
+    cache miss (or ``refresh=True``). The single fetch warms every card, so all
+    later per-name lookups and the recognition hot path stay offline.
+    """
+    cache_dir = cache_dir or paths.scryfall_cache_dir()
+    with _variants_lock:
+        if not refresh:
+            cached = _load_set_index(expansion, cache_dir)
+            if cached is not None:
+                return {n: [ArtRef(**r) for r in refs] for n, refs in cached.items()}
+        cards = _fetch_set_prints(expansion)
+        _save_set_index(expansion, cache_dir, cards)
+        return cards
+
+
+def _lookup(index: dict[str, list[ArtRef]], name: str) -> list[ArtRef]:
+    """Refs for ``name``, tolerating MDFC front-face vs full-name mismatch."""
+    refs = index.get(name)
+    if refs is not None:
+        return refs
+    front = _front_name(name)
+    refs = index.get(front)
+    if refs is not None:
+        return refs
+    for card_name, card_refs in index.items():
+        if _front_name(card_name) == front:
+            return card_refs
+    return []
+
+
+def enumerate_set_cards(expansion: str, *, cache_dir: Path | None = None) -> list[str]:
+    """All distinct card names in ``expansion`` (backed by the cached index).
+
+    The live hot path warms artwork per-pack from the draft log; this exists for
+    the manual "download a whole set" action, where there is no pack yet. Returns
+    ``[]`` for an unknown set code.
+    """
+    return list(set_artwork_index(expansion, cache_dir=cache_dir).keys())
 
 
 def booster_artwork_ids(
@@ -214,22 +258,11 @@ def booster_artwork_ids(
 ) -> list[ArtRef]:
     """Every artwork that can appear in a booster of ``expansion`` for ``name``.
 
-    Cache-first: the per-set enumeration is stored in ``<EXP>_variants.json`` so
-    repeated calls (and the recognition hot path, once warmed) stay offline.
+    Cache-first via :func:`set_artwork_index`; once the set is warmed this is a
+    pure offline lookup.
     """
-    cache_dir = cache_dir or paths.scryfall_cache_dir()
-    with _variants_lock:
-        variants = _load_variants(expansion, cache_dir)
-        cached = variants.get(name)
-    if cached is not None:
-        return [ArtRef(**ref) for ref in cached]
-
-    refs = _query_scryfall_prints(expansion, name)
-    with _variants_lock:
-        variants = _load_variants(expansion, cache_dir)
-        variants[name] = [asdict(ref) for ref in refs]
-        _save_variants(expansion, cache_dir, variants)
-    return refs
+    index = set_artwork_index(expansion, cache_dir=cache_dir)
+    return _lookup(index, name)
 
 
 # --- image fetch ------------------------------------------------------------
@@ -262,15 +295,15 @@ def ensure_set_artwork(
     recognition hot path is afterwards cache-only.
     """
     cache_dir = cache_dir or paths.scryfall_cache_dir()
+    index = set_artwork_index(expansion, cache_dir=cache_dir)  # one search, then cached
     seen: set[str] = set()
     for name in names:
         if name in seen:
             continue
         seen.add(name)
-        try:
-            refs = booster_artwork_ids(expansion, name, cache_dir=cache_dir)
-            for ref in refs:
+        for ref in _lookup(index, name):
+            try:
                 fetch_artwork(ref, cache_dir)
-        except requests.RequestException as exc:
-            _log.warning("Artwork warm failed for %s: %s", name, exc)
+            except requests.RequestException as exc:
+                _log.warning("Artwork fetch failed for %s: %s", name, exc)
     _log.info("Warmed artwork cache for %d names in %s", len(seen), expansion)

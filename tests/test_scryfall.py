@@ -91,12 +91,15 @@ def test_image_url_prefers_png_then_falls_back():
     assert scryfall_art._image_url({}) is None
 
 
-def test_booster_artwork_ids_queries_and_caches(tmp_path, monkeypatch):
+def test_booster_artwork_ids_fetches_whole_set_once_and_caches(tmp_path, monkeypatch):
     pages = [
         FakeResp({
             "has_more": True,
             "next_page": "http://api/next",
-            "data": [{"id": "a1", "name": "X", "image_uris": {"png": "u1"}}],
+            "data": [
+                {"id": "a1", "name": "X", "image_uris": {"png": "u1"}},
+                {"id": "y1", "name": "Y", "image_uris": {"png": "uy"}},
+            ],
         }),
         FakeResp({
             "has_more": False,
@@ -114,26 +117,46 @@ def test_booster_artwork_ids_queries_and_caches(tmp_path, monkeypatch):
 
     refs = scryfall_art.booster_artwork_ids("MSH", "X", cache_dir=tmp_path)
     assert refs == [ArtRef("a1", "u1", "X"), ArtRef("a2", "u2", "X")]
-    assert calls["n"] == 2  # paginated
+    assert calls["n"] == 2  # one paginated set fetch, not one search per name
 
-    # Now cached: a second call must not hit the network.
+    # A different name from the same set is served from the same warmed index.
     monkeypatch.setattr(scryfall_art, "_http_get", lambda *a, **k: pytest.fail("network"))
-    again = scryfall_art.booster_artwork_ids("MSH", "X", cache_dir=tmp_path)
-    assert again == refs
+    assert scryfall_art.booster_artwork_ids("MSH", "Y", cache_dir=tmp_path) == [
+        ArtRef("y1", "uy", "Y")
+    ]
     cache = json.loads((tmp_path / "MSH_variants.json").read_text())
-    assert cache["X"][0]["scryfall_id"] == "a1"
+    assert cache["complete"] is True
+    assert cache["cards"]["X"][0]["scryfall_id"] == "a1"
 
 
-def test_enumerate_set_cards_paginates_and_dedups(monkeypatch):
+def test_booster_artwork_ids_matches_mdfc_front_face(tmp_path, monkeypatch):
+    page = FakeResp({
+        "has_more": False,
+        "data": [{"id": "p1", "name": "Front // Back", "image_uris": {"png": "uf"}}],
+    })
+    monkeypatch.setattr(scryfall_art, "_http_get", lambda *a, **k: page)
+    # MTGO's log may give only the front face; it must still resolve.
+    assert scryfall_art.booster_artwork_ids("MSH", "Front", cache_dir=tmp_path) == [
+        ArtRef("p1", "uf", "Front // Back")
+    ]
+
+
+def test_enumerate_set_cards_paginates_and_dedups(tmp_path, monkeypatch):
     pages = [
         FakeResp({
             "has_more": True,
             "next_page": "http://api/next",
-            "data": [{"name": "Alpha"}, {"name": "Beta"}],
+            "data": [
+                {"id": "1", "name": "Alpha", "image_uris": {"png": "a"}},
+                {"id": "2", "name": "Beta", "image_uris": {"png": "b"}},
+            ],
         }),
         FakeResp({
             "has_more": False,
-            "data": [{"name": "Beta"}, {"name": "Gamma"}],
+            "data": [
+                {"id": "3", "name": "Beta", "image_uris": {"png": "b2"}},
+                {"id": "4", "name": "Gamma", "image_uris": {"png": "g"}},
+            ],
         }),
     ]
     calls = {"n": 0}
@@ -144,19 +167,19 @@ def test_enumerate_set_cards_paginates_and_dedups(monkeypatch):
         return resp
 
     monkeypatch.setattr(scryfall_art, "_http_get", fake_get)
-    names = scryfall_art.enumerate_set_cards("MSH")
-    assert names == ["Alpha", "Beta", "Gamma"]  # order preserved, deduped
+    names = scryfall_art.enumerate_set_cards("MSH", cache_dir=tmp_path)
+    assert names == ["Alpha", "Beta", "Gamma"]  # order preserved, deduped by name
     assert calls["n"] == 2  # paginated
 
 
-def test_enumerate_set_cards_404_returns_empty(monkeypatch):
+def test_enumerate_set_cards_404_returns_empty(tmp_path, monkeypatch):
     def fake_get(url, params=None):
         resp = requests.Response()
         resp.status_code = 404
         raise requests.HTTPError(response=resp)
 
     monkeypatch.setattr(scryfall_art, "_http_get", fake_get)
-    assert scryfall_art.enumerate_set_cards("ZZZ") == []
+    assert scryfall_art.enumerate_set_cards("ZZZ", cache_dir=tmp_path) == []
 
 
 def test_booster_artwork_ids_404_returns_empty(tmp_path, monkeypatch):
@@ -185,19 +208,19 @@ def test_fetch_artwork_downloads_and_caches(tmp_path, monkeypatch):
     assert out.read_bytes() == b"PNG"
 
 
-def test_ensure_set_artwork_dedups_and_fetches(tmp_path, monkeypatch):
-    enum_calls: list[str] = []
+def test_ensure_set_artwork_fetches_set_once_and_dedups(tmp_path, monkeypatch):
+    index_calls: list[str] = []
     fetched: list[str] = []
 
-    def fake_enum(exp, name, **kw):
-        enum_calls.append(name)
-        return [ArtRef(f"{name}-1", "u", name)]
+    def fake_index(exp, **kw):
+        index_calls.append(exp)
+        return {"A": [ArtRef("A-1", "u", "A")], "B": [ArtRef("B-1", "u", "B")]}
 
-    monkeypatch.setattr(scryfall_art, "booster_artwork_ids", fake_enum)
+    monkeypatch.setattr(scryfall_art, "set_artwork_index", fake_index)
     monkeypatch.setattr(
         scryfall_art, "fetch_artwork", lambda ref, cache_dir: fetched.append(ref.scryfall_id)
     )
 
     scryfall_art.ensure_set_artwork("MSH", ["A", "B", "A"], cache_dir=tmp_path)
-    assert enum_calls == ["A", "B"]  # deduped
-    assert fetched == ["A-1", "B-1"]
+    assert index_calls == ["MSH"]  # one set fetch warms every name
+    assert fetched == ["A-1", "B-1"]  # deduped, images downloaded per name
