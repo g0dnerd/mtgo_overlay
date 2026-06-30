@@ -79,6 +79,53 @@ class LabelSpec:
     h: int
 
 
+# --- shared geometry + painting --------------------------------------------
+# Module-level so the live overlay and the offscreen preview tool
+# (tools/preview_overlay.py) draw identical pills from the same code.
+
+
+def font_for(style: OverlayStyle, card_h: int) -> QFont:
+    font = QFont(style.font_family)
+    font.setPixelSize(max(8, round(card_h * style.font_h_frac)))
+    font.setBold(True)
+    return font
+
+
+def compute_label_rect(
+    spec: LabelSpec, style: OverlayStyle, fm: QFontMetrics
+) -> QRectF:
+    pad_x = style.pad_x_frac * spec.w
+    pad_y = style.pad_y_frac * spec.h
+    bw = fm.horizontalAdvance(format_wr(spec.gih_wr)) + 2 * pad_x
+    bh = fm.height() + 2 * pad_y
+    inset = style.inset_x_frac * spec.w
+    x = spec.x + spec.w - inset - bw
+    y = spec.y + style.pill_bottom_frac * spec.h - bh
+    # Clamp fully inside the card box.
+    x = max(spec.x, min(x, spec.x + spec.w - bw))
+    y = max(spec.y, min(y, spec.y + spec.h - bh))
+    return QRectF(x, y, bw, bh)
+
+
+def paint_label(
+    painter: QPainter, rect: QRectF, spec: LabelSpec, style: OverlayStyle
+) -> None:
+    radius = rect.height() / 2
+    painter.setFont(font_for(style, spec.h))
+    # Soft drop shadow so the pill reads on bright art.
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(0, 0, 0, 90))
+    painter.drawRoundedRect(
+        rect.translated(0, max(1.0, rect.height() * 0.06)), radius, radius
+    )
+    # Percentile-colored pill with a thin dark rim.
+    painter.setBrush(ramp_color(spec.tier, style.unknown_color))
+    painter.setPen(QPen(QColor(0, 0, 0, 160), 1.2))
+    painter.drawRoundedRect(rect, radius, radius)
+    painter.setPen(QColor(style.fg))
+    painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, format_wr(spec.gih_wr))
+
+
 class OverlayWindow(QWidget):
     def __init__(self, style: OverlayStyle | None = None, parent: QWidget | None = None):
         super().__init__(parent)
@@ -112,46 +159,18 @@ class OverlayWindow(QWidget):
     # --- geometry ------------------------------------------------------------
 
     def _font_for(self, card_h: int) -> QFont:
-        font = QFont(self.style.font_family)
-        font.setPixelSize(max(8, round(card_h * self.style.font_h_frac)))
-        font.setBold(True)
-        return font
+        return font_for(self.style, card_h)
 
     def _compute_rect(self, spec: LabelSpec) -> QRectF:
-        fm = QFontMetrics(self._font_for(spec.h))
-        pad_x = self.style.pad_x_frac * spec.w
-        pad_y = self.style.pad_y_frac * spec.h
-        bw = fm.horizontalAdvance(format_wr(spec.gih_wr)) + 2 * pad_x
-        bh = fm.height() + 2 * pad_y
-        inset = self.style.inset_x_frac * spec.w
-        x = spec.x + spec.w - inset - bw
-        y = spec.y + self.style.pill_bottom_frac * spec.h - bh
-        # Clamp fully inside the card box.
-        x = max(spec.x, min(x, spec.x + spec.w - bw))
-        y = max(spec.y, min(y, spec.y + spec.h - bh))
-        return QRectF(x, y, bw, bh)
+        return compute_label_rect(spec, self.style, QFontMetrics(self._font_for(spec.h)))
 
     # --- painting ------------------------------------------------------------
 
     def paintEvent(self, event) -> None:  # noqa: N802 (Qt override)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        fg = QColor(self.style.fg)
-
         for spec in self._labels:
-            rect = self._compute_rect(spec)
-            radius = rect.height() / 2
-            painter.setFont(self._font_for(spec.h))
-            # Soft drop shadow so the pill reads on bright art.
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(0, 0, 0, 90))
-            painter.drawRoundedRect(rect.translated(0, max(1.0, rect.height() * 0.06)), radius, radius)
-            # Percentile-colored pill with a thin dark rim.
-            painter.setBrush(ramp_color(spec.tier, self.style.unknown_color))
-            painter.setPen(QPen(QColor(0, 0, 0, 160), 1.2))
-            painter.drawRoundedRect(rect, radius, radius)
-            painter.setPen(fg)
-            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, format_wr(spec.gih_wr))
+            paint_label(painter, self._compute_rect(spec), spec, self.style)
         painter.end()
 
     # --- Win32 click-through (Windows only) ----------------------------------
