@@ -89,6 +89,18 @@ def test_client_fetch_builds_request_and_parses(fixtures_dir):
     assert "MtgoOverlay" in call["headers"]["User-Agent"]
 
 
+def test_client_fetch_user_group_param(fixtures_dir):
+    data = json.loads((fixtures_dir / "ratings" / "sample_17lands.json").read_text())
+    session = _FakeSession(_FakeResponse(data))
+    client = SeventeenLandsClient("ua", session=session)
+
+    client.fetch_ratings("mh3", "PremierDraft")
+    assert "user_group" not in session.calls[0]["params"]  # all-players: omitted
+
+    client.fetch_ratings("mh3", "PremierDraft", user_group="top")
+    assert session.calls[1]["params"]["user_group"] == "top"
+
+
 def test_client_rejects_non_array():
     session = _FakeSession(_FakeResponse({"not": "an array"}))
     client = SeventeenLandsClient("ua", session=session)
@@ -131,6 +143,18 @@ class _StubClient:
         return self._data
 
 
+class _GroupStubClient:
+    """Returns a different win rate per cohort so the two caches are tellable apart."""
+
+    def __init__(self):
+        self.calls: list[dict] = []
+
+    def fetch_ratings(self, expansion, fmt, **kw):
+        self.calls.append(kw)
+        wr = 0.62 if kw.get("user_group") == "top" else 0.55
+        return [{"name": "Card A", "ever_drawn_win_rate": wr}]
+
+
 CSV_NAMES = ["Agent Phil Coulson", "Island", "Leader, Super-Genius"]
 
 
@@ -152,6 +176,34 @@ def test_repo_csv_first(tmp_path, fixtures_dir):
     assert "Island" not in by_name  # basics filtered in lookup
     assert by_name["Agent Phil Coulson"] == 70.3
     assert by_name["Leader, Super-Genius"] == 72.6
+
+
+def test_repo_group_axis_distinct_caches(tmp_path):
+    client = _GroupStubClient()
+    repo = _repo(tmp_path, client=client)
+
+    p_all = repo.ensure("mh3", "PremierDraft", use_live=True, group="all")
+    p_top = repo.ensure("mh3", "PremierDraft", use_live=True, group="top")
+
+    assert p_all != p_top
+    assert p_all.name.endswith("_all.json") and p_top.name.endswith("_top.json")
+    # "all" omits user_group (its aggregate); "top" sends it explicitly.
+    assert client.calls[0].get("user_group") is None
+    assert client.calls[1].get("user_group") == "top"
+
+    assert repo.lookup("mh3", "PremierDraft", ["Card A"], "all")[0].gih_wr == 55.0
+    assert repo.lookup("mh3", "PremierDraft", ["Card A"], "top")[0].gih_wr == 62.0
+    assert repo.distribution("mh3", "PremierDraft", "all") == [55.0]
+    assert repo.distribution("mh3", "PremierDraft", "top") == [62.0]
+
+
+def test_repo_default_group_is_all(tmp_path):
+    """Omitting group keeps the legacy all-players behavior (and omits user_group)."""
+    client = _GroupStubClient()
+    repo = _repo(tmp_path, client=client)
+    path = repo.ensure("mh3", "PremierDraft", use_live=True)
+    assert path.name.endswith("_all.json")
+    assert client.calls[0].get("user_group") is None
 
 
 def test_repo_ttl_fresh_then_stale(tmp_path, fixtures_dir):

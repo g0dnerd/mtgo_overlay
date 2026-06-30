@@ -48,8 +48,15 @@ class Settings:
     # usage guidelines (the live endpoint is undocumented/internal).
     use_live_17lands: bool = False
     manual_csv_path: str = ""
+    # Which 17lands player cohort the pill shows: "top" (top players) or "all".
+    # "top" sends user_group=top; "all" omits the param (the site's aggregate).
+    user_group: str = "top"
+    # Set once the first-run privacy/affiliation notice has been accepted.
+    accepted_disclaimer: bool = False
     # Polite identifying UA for the 17lands endpoint (tool + contact).
-    user_agent: str = "MtgoOverlay/0.2 (+https://github.com/; personal use)"
+    user_agent: str = (
+        "MtgoOverlay/0.2 (+https://github.com/g0dnerd/mtgo_overlay; personal use)"
+    )
     overlay: OverlayStyle = field(default_factory=OverlayStyle)
 
     # --- persistence ---------------------------------------------------------

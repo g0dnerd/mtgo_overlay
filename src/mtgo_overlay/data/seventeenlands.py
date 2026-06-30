@@ -39,12 +39,18 @@ class SeventeenLandsClient:
         *,
         start_date: str | None = None,
         end_date: str | None = None,
+        user_group: str | None = None,
     ) -> list[dict]:
         params = {"expansion": expansion.upper(), "format": fmt}
         if start_date:
             params["start_date"] = start_date
         if end_date:
             params["end_date"] = end_date
+        # Omitting user_group yields the all-players aggregate; only "top" (and
+        # the site's other named cohorts) take an explicit value. Sending
+        # user_group=all is a no-op that returns null win rates, so never do it.
+        if user_group:
+            params["user_group"] = user_group
         headers = {"User-Agent": self.user_agent, "Accept": "application/json"}
         try:
             resp = self._session.get(

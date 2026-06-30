@@ -32,7 +32,12 @@ from .capture.screen_capture import capture_client_area
 from .config.settings import Settings
 from .data import expansions, sets
 from .data.expansions import SupportedSets
-from .data.ratings_repo import CardRating, RatingsRepository
+from .data.ratings_repo import (
+    GROUP_ALL,
+    GROUP_TOP,
+    CardRating,
+    RatingsRepository,
+)
 from .data.seventeenlands import SeventeenLandsClient
 from .draft.log_parser import Log
 from .draft.log_watcher import DraftLogWatcher
@@ -47,6 +52,10 @@ from .system import logging_setup, paths, win32
 _log = logging_setup.get_logger("app")
 
 PICKS_PER_DRAFT = 42
+
+# Both player cohorts are warmed per draft so the tray toggle flips between them
+# with no network round-trip (2 small requests/set/day instead of 1).
+RATING_GROUPS = (GROUP_ALL, GROUP_TOP)
 
 # Wait this long after the debounce before capturing, so MTGO has finished
 # loading the new pack's card art (capturing too early yields a blank grid).
@@ -195,7 +204,7 @@ class _WorkerSignals(QObject):
 class RecognitionWorker(QRunnable):
     """Off-UI: capture -> locate -> lookup, then emit a payload."""
 
-    def __init__(self, generation, hwnd, names, expansion, fmt, repo, cfg):
+    def __init__(self, generation, hwnd, names, expansion, fmt, repo, cfg, group):
         super().__init__()
         self.signals = _WorkerSignals()
         self.generation = generation
@@ -205,6 +214,7 @@ class RecognitionWorker(QRunnable):
         self.fmt = fmt
         self.repo = repo
         self.cfg = cfg
+        self.group = group
 
     def run(self) -> None:
         try:
@@ -224,7 +234,9 @@ class RecognitionWorker(QRunnable):
                 _log.info(
                     "Cards NOT located (%d): %s", len(missing), "; ".join(missing)
                 )
-            ratings = self.repo.lookup(self.expansion, self.fmt, self.names)
+            ratings = self.repo.lookup(
+                self.expansion, self.fmt, self.names, self.group
+            )
             self.signals.labelsReady.emit(
                 {
                     "generation": self.generation,
@@ -259,21 +271,23 @@ class _EnsureWorker(QRunnable):
             self.expansion,
             len(self.names),
         )
-        try:
-            csv_path = (
-                Path(self.settings.manual_csv_path)
-                if self.settings.manual_csv_path
-                else None
-            )
-            self.repo.ensure(
-                self.expansion,
-                self.fmt,
-                use_live=self.settings.use_live_17lands,
-                csv_path=csv_path,
-                start_date=self.start_date,
-            )
-        except Exception as exc:  # noqa: BLE001
-            _log.warning("Ratings ensure failed: %s", exc)
+        csv_path = (
+            Path(self.settings.manual_csv_path)
+            if self.settings.manual_csv_path
+            else None
+        )
+        for group in RATING_GROUPS:
+            try:
+                self.repo.ensure(
+                    self.expansion,
+                    self.fmt,
+                    use_live=self.settings.use_live_17lands,
+                    group=group,
+                    csv_path=csv_path,
+                    start_date=self.start_date,
+                )
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("Ratings ensure failed (%s): %s", group, exc)
         try:
             _log.info(
                 "Warming Scryfall artwork cache for %s (cache-first; the first draft "
@@ -330,17 +344,22 @@ class _PrefetchWorker(QRunnable):
             )
             return
         ratings_ok = True
-        try:
-            _log.info("Warming 17lands ratings for %s/%s...", self.expansion, self.fmt)
-            self.repo.ensure(
-                self.expansion, self.fmt, use_live=True, csv_path=None,
-                start_date=self.start_date,
-            )
-        except Exception as exc:  # noqa: BLE001 - ratings is best-effort here
-            ratings_ok = False
-            _log.warning(
-                "Ratings warm failed for %s/%s: %s", self.expansion, self.fmt, exc
-            )
+        for group in RATING_GROUPS:
+            try:
+                _log.info(
+                    "Warming 17lands ratings for %s/%s/%s...",
+                    self.expansion, self.fmt, group,
+                )
+                self.repo.ensure(
+                    self.expansion, self.fmt, use_live=True, group=group,
+                    csv_path=None, start_date=self.start_date,
+                )
+            except Exception as exc:  # noqa: BLE001 - ratings is best-effort here
+                ratings_ok = False
+                _log.warning(
+                    "Ratings warm failed for %s/%s/%s: %s",
+                    self.expansion, self.fmt, group, exc,
+                )
         self.signals.labelsReady.emit(
             {
                 "expansion": self.expansion,
@@ -414,6 +433,7 @@ class AppController(QObject):
         self.tracker.focusChanged.connect(self._on_focus_changed)
 
         self._tray = None
+        self._group_actions = None
         self._mtgo_present = False
         self._shutdown_done = False
 
@@ -616,6 +636,7 @@ class AppController(QObject):
             self.settings.fmt,
             self.repo,
             self.cfg,
+            self.settings.user_group,
         )
         worker.signals.labelsReady.connect(self._on_labels)
         self.pool.start(worker)
@@ -632,7 +653,9 @@ class AppController(QObject):
             return  # superseded by a newer pack
         dpr = self._device_pixel_ratio()
         # Read fresh each pack so a re-imported CSV reshapes the percentiles.
-        distribution = self.repo.distribution(self.expansion, self.settings.fmt)
+        distribution = self.repo.distribution(
+            self.expansion, self.settings.fmt, self.settings.user_group
+        )
         specs = build_label_specs(
             payload["located"], payload["ratings"], dpr, distribution
         )
@@ -695,7 +718,7 @@ class AppController(QObject):
     # --- tray ----------------------------------------------------------------
 
     def _setup_tray(self) -> None:
-        from PySide6.QtGui import QAction, QIcon
+        from PySide6.QtGui import QAction, QActionGroup, QIcon
         from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
         from .system.resources import resource_path
@@ -706,19 +729,46 @@ class AppController(QObject):
         self._tray.setToolTip("MTGO 17lands Overlay")
 
         menu = QMenu()
+        menu.setToolTipsVisible(True)
         for text, slot in (
             ("Reboot", self._restart_watcher),
             ("Enter MTGO username", self._prompt_username),
             ("Change log folder", self._prompt_log_folder),
-            ("Set ratings CSV", self._prompt_ratings_csv),
         ):
             action = QAction(text, menu)
             action.triggered.connect(slot)
             menu.addAction(action)
 
+        # With the live endpoint on, the CSV is only an automatic offline
+        # fallback — so the picker is greyed out rather than presented as a source.
+        csv_action = QAction("Set ratings CSV", menu)
+        csv_action.triggered.connect(self._prompt_ratings_csv)
+        if self.settings.use_live_17lands:
+            csv_action.setEnabled(False)
+            csv_action.setToolTip(
+                "Using live 17lands data; the CSV is only a fallback when offline."
+            )
+        menu.addAction(csv_action)
+
         download_action = QAction("Download set…", menu)
         download_action.triggered.connect(self._prompt_download_set)
         menu.addAction(download_action)
+
+        menu.addSeparator()
+        # Held on self so the action group (and its checked state) outlives this
+        # method; mutually-exclusive checkable picks for the win-rate cohort.
+        self._group_actions = QActionGroup(menu)
+        self._group_actions.setExclusive(True)
+        for label, group in (
+            ("Win rates: Top players", GROUP_TOP),
+            ("Win rates: All players", GROUP_ALL),
+        ):
+            action = QAction(label, menu)
+            action.setCheckable(True)
+            action.setChecked(self.settings.user_group == group)
+            action.triggered.connect(lambda _checked, g=group: self._set_user_group(g))
+            self._group_actions.addAction(action)
+            menu.addAction(action)
 
         menu.addSeparator()
         clear_action = QAction("Clear local data…", menu)
@@ -793,6 +843,17 @@ class AppController(QObject):
             self.settings.save()
             _log.info("Ratings CSV set to %s.", path)
             self._reimport_ratings()
+
+    def _set_user_group(self, group: str) -> None:
+        """Switch the pill between the top-players and all-players cohorts. Both
+        caches were warmed at draft prep, so re-recognizing reads the other one
+        instantly; ``_reimport_ratings`` also re-warms in case a cache is missing."""
+        if group == self.settings.user_group:
+            return
+        self.settings.user_group = group
+        self.settings.save()
+        _log.info("Win rate source set to %s players.", group)
+        self._reimport_ratings()
 
     def _reimport_ratings(self) -> None:
         """Rebuild the ratings cache from the current CSV and re-recognize, so new
