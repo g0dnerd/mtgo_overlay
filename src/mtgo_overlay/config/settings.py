@@ -30,7 +30,7 @@ class OverlayStyle:
     font_h_frac: float = 0.072
     # Pill's bottom edge as a fraction of card height — kept at the bottom of the
     # art, clear of the title bar above and the type line / rules text below.
-    pill_bottom_frac: float = 0.50
+    pill_bottom_frac: float = 0.35
     # Inset of the pill's right edge from the card's right edge (fraction of width).
     inset_x_frac: float = 0.045
     # Horizontal / vertical text padding as fractions of card width / height.
