@@ -86,3 +86,60 @@ def test_app_controller_constructs(qapp, tmp_path, monkeypatch):
     assert controller.tracker is not None
     assert controller.repo is not None
     assert controller.log is None
+
+
+class _FakeLog:
+    """Stand-in for draft.log_parser.Log with a scripted check_for_update."""
+
+    def __init__(self, statuses, pack):
+        self._statuses = list(statuses)
+        self.picks: list[str] = []
+        self.current_pack = list(pack)
+
+    def check_for_update(self) -> str:
+        return self._statuses.pop(0)
+
+
+def _controller(qapp, tmp_path, monkeypatch):
+    monkeypatch.setenv("MTGO_OVERLAY_HOME", str(tmp_path))
+    from mtgo_overlay.app import AppController, LabelSpec
+
+    controller = AppController(qapp)
+    controller.overlay.set_labels([LabelSpec(60.0, 0.5, 0, 0, 100, 140)])
+    return controller
+
+
+def test_pick_clears_labels_and_suppresses_recognition(qapp, tmp_path, monkeypatch):
+    # After a pick the picked pack lingers in current_pack, so the controller must
+    # not render labels until a new pack arrives — even if a refocus/resize tries
+    # to re-recognize, or an in-flight worker reports back.
+    controller = _controller(qapp, tmp_path, monkeypatch)
+    controller.log = _FakeLog(["picked"], pack=["Agent Phil Coulson"])
+
+    gen_before = controller._generation
+    controller._on_log_modified("ignored")
+
+    assert controller._awaiting_pack is True
+    assert controller.overlay._labels == []  # cleared on pick
+
+    # A refocus/resize during the gap routes through _dispatch_recognition; it must
+    # not kick off a worker (generation stays put) despite current_pack being set.
+    controller._dispatch_recognition()
+    assert controller._generation == gen_before
+
+    # An in-flight worker that finishes after the pick must not repaint stale labels.
+    controller._on_labels(
+        {"generation": gen_before, "located": [], "ratings": [], "rect": None}
+    )
+    assert controller.overlay._labels == []
+
+
+def test_new_pack_clears_awaiting_flag(qapp, tmp_path, monkeypatch):
+    controller = _controller(qapp, tmp_path, monkeypatch)
+    controller._awaiting_pack = True
+    controller._draft_prepared = True
+    controller.log = _FakeLog(["new"], pack=["Some Card"])
+
+    controller._on_log_modified("ignored")
+
+    assert controller._awaiting_pack is False

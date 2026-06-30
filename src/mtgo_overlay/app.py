@@ -321,6 +321,9 @@ class AppController(QObject):
         self.expansion = ""
         self._generation = 0
         self._draft_prepared = False
+        # True between a pick and the next pack: the picked pack lingers in
+        # Log.current_pack, so suppress recognition until a new pack lands.
+        self._awaiting_pack = False
 
         self._debounce = QTimer(self)
         self._debounce.setSingleShot(True)
@@ -438,6 +441,7 @@ class AppController(QObject):
             len(self.log.picks),
         )
         self._draft_prepared = False
+        self._awaiting_pack = False
         # MTGO (and the replay tool) usually create the log file before the first
         # pack is written, so current_pack is empty here. Defer warming to the
         # first real pack instead of warming artwork for 0 names.
@@ -465,11 +469,13 @@ class AppController(QObject):
         if status == "nothing":
             return
         if status == "picked":
+            self._awaiting_pack = True
             self.overlay.clear()
             if len(self.log.picks) >= PICKS_PER_DRAFT:
                 self._finish_draft()
             return
         # "new" pack on screen.
+        self._awaiting_pack = False
         if not self._draft_prepared:
             self._prepare_draft_data()
         else:
@@ -488,7 +494,7 @@ class AppController(QObject):
         self._debounce.start()
 
     def _dispatch_recognition(self) -> None:
-        if self.log is None or not self.log.current_pack:
+        if self.log is None or not self.log.current_pack or self._awaiting_pack:
             return
         hwnd = self.tracker.hwnd or win32.find_mtgo_hwnd()
         if hwnd is None:
@@ -530,6 +536,8 @@ class AppController(QObject):
         self.pool.start(worker)
 
     def _on_labels(self, payload: dict) -> None:
+        if self._awaiting_pack:
+            return  # a pick landed while this worker was in flight
         if payload["generation"] != self._generation:
             _log.info(
                 "Dropping stale recognition result (gen %d; current %d).",
