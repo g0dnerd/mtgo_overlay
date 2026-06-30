@@ -11,6 +11,7 @@ Set ``MTGO_OVERLAY_HOME`` to override the root entirely (portable mode / tests).
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
 APP_NAME = "MtgoOverlay"
@@ -71,3 +72,27 @@ def ratings_cache_dir() -> Path:
 
 def scryfall_cache_dir() -> Path:
     return _ensure(cache_dir() / "scryfall")
+
+
+def clear_local_data() -> list[Path]:
+    """Delete all generated local data — caches (ratings + Scryfall art), the
+    persisted config, and logs + debug captures — and return the top-level
+    paths removed.
+
+    The caller must release any open handles first (notably the app log file,
+    which Windows keeps locked while open). The directory skeleton is recreated
+    lazily by the getters above on next use.
+    """
+    # Reference paths without the getters' ``_ensure`` side effect, so this stays
+    # idempotent instead of recreating the very dirs it just deleted.
+    local = _localappdata_root() / APP_NAME
+    cfg = _appdata_root() / APP_NAME / "config.toml"
+    removed: list[Path] = []
+    for d in (local / "cache", local / "logs"):
+        if d.exists():
+            shutil.rmtree(d, ignore_errors=True)
+            removed.append(d)
+    if cfg.exists():
+        cfg.unlink()
+        removed.append(cfg)
+    return removed

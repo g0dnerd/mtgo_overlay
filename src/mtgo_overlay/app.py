@@ -636,6 +636,11 @@ class AppController(QObject):
         menu.addAction(download_action)
 
         menu.addSeparator()
+        clear_action = QAction("Clear local data…", menu)
+        clear_action.triggered.connect(self._prompt_clear_data)
+        menu.addAction(clear_action)
+
+        menu.addSeparator()
         exit_action = QAction("Exit", menu)
         exit_action.triggered.connect(self._exit)
         menu.addAction(exit_action)
@@ -748,6 +753,46 @@ class AppController(QObject):
             self.settings.log_dir = folder
             self.settings.save()
             self._restart_watcher()
+
+    def _prompt_clear_data(self) -> None:
+        from PySide6.QtWidgets import QMessageBox
+
+        box = QMessageBox()
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Clear local data")
+        box.setText(
+            "Delete all cached card art and ratings, reset settings to "
+            "defaults, and remove logs and debug captures?"
+        )
+        box.setInformativeText(
+            "Your MTGO username and log folder will be cleared and must be "
+            "re-entered. This cannot be undone."
+        )
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        box.setDefaultButton(QMessageBox.Cancel)
+        if box.exec() == QMessageBox.Yes:
+            self._clear_local_data()
+
+    def _clear_local_data(self) -> None:
+        self.overlay.clear()
+        self.log = None
+        logging_setup.close_log_file()
+        try:
+            removed = paths.clear_local_data()
+        finally:
+            logging_setup.reopen_log_file()
+        _log.info(
+            "Cleared local data: %s",
+            ", ".join(str(p) for p in removed) or "nothing to remove",
+        )
+        self.settings = Settings()
+        self._restart_watcher()
+        if self._tray is not None:
+            self._tray.showMessage(
+                "MTGO 17lands Overlay",
+                "Local data cleared. Re-enter your MTGO username and log folder "
+                "from the tray menu.",
+            )
 
     def _exit(self) -> None:
         self.shutdown()
