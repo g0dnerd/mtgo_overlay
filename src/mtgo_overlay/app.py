@@ -41,6 +41,7 @@ from .data.ratings_repo import (
 from .data.seventeenlands import SeventeenLandsClient
 from .draft.log_parser import Log
 from .draft.log_watcher import DraftLogWatcher
+from .onboarding.wizard import needs_onboarding, run_onboarding
 from .overlay.overlay_window import LabelSpec, OverlayWindow, percentile_rank
 from .overlay.window_tracker import WindowTracker
 from .recognition import scryfall_art
@@ -48,6 +49,7 @@ from .recognition.config import RecognitionConfig
 from .recognition.pipeline import locate_cards
 from .recognition.types import CardLocation
 from .system import logging_setup, paths, win32
+from . import __version__
 
 _log = logging_setup.get_logger("app")
 
@@ -441,6 +443,9 @@ class AppController(QObject):
 
     def start(self) -> None:
         self._log_environment()
+        # Run the first-run wizard before the tray so the menu (e.g. the CSV
+        # item, which keys on use_live_17lands) reflects any consent given here.
+        self._maybe_run_onboarding()
         self._setup_tray()
         _log.info("Tray icon shown.")
         self.overlay.show()
@@ -449,6 +454,42 @@ class AppController(QObject):
         _log.info("Window tracker started — polling for the MTGO window at 10 Hz.")
         self.pool.start(_SupportedSetsWorker(self._supported, self._on_supported_sets))
         self._restart_watcher()
+        self._maybe_show_setup_toast()
+
+    def _maybe_run_onboarding(self) -> None:
+        if not needs_onboarding(self.settings):
+            return
+        _log.info("First run / disclaimer not accepted — showing onboarding wizard.")
+        if run_onboarding(self.settings):
+            _log.info("Onboarding completed.")
+        else:
+            _log.info(
+                "Onboarding dismissed before finishing; the tray 'Setup status…' "
+                "item can resume it later."
+            )
+
+    def _missing_setup(self) -> list[str]:
+        """Human-readable list of still-unconfigured essentials (empty = ready)."""
+        missing: list[str] = []
+        if not self.settings.mtgo_username:
+            missing.append("MTGO username")
+        if not self.settings.log_dir:
+            missing.append("log folder")
+        if not self.settings.use_live_17lands and not self.settings.manual_csv_path:
+            missing.append("ratings source")
+        return missing
+
+    def _maybe_show_setup_toast(self) -> None:
+        if self._tray is None:
+            return
+        missing = self._missing_setup()
+        if missing:
+            self._tray.showMessage(
+                "MTGO 17lands Overlay — setup needed",
+                "Still to configure: "
+                + ", ".join(missing)
+                + ". Open the tray menu → 'Setup status…' to finish.",
+            )
 
     def _log_environment(self) -> None:
         cfg_path = paths.config_file()
@@ -718,8 +759,8 @@ class AppController(QObject):
     # --- tray ----------------------------------------------------------------
 
     def _setup_tray(self) -> None:
-        from PySide6.QtGui import QAction, QActionGroup, QIcon
-        from PySide6.QtWidgets import QMenu, QSystemTrayIcon
+        from PySide6.QtGui import QIcon
+        from PySide6.QtWidgets import QSystemTrayIcon
 
         from .system.resources import resource_path
 
@@ -727,14 +768,27 @@ class AppController(QObject):
         icon = QIcon(str(icon_path)) if icon_path.exists() else QIcon()
         self._tray = QSystemTrayIcon(icon, self.app)
         self._tray.setToolTip("MTGO 17lands Overlay")
+        self._tray.setContextMenu(self._build_menu())
+        self._tray.show()
+
+    def _refresh_tray(self) -> None:
+        """Rebuild the menu so state-dependent items (e.g. the CSV action, gated
+        on ``use_live_17lands``) reflect settings changed after launch."""
+        if self._tray is not None:
+            self._tray.setContextMenu(self._build_menu())
+
+    def _build_menu(self):
+        from PySide6.QtGui import QAction, QActionGroup
+        from PySide6.QtWidgets import QMenu
 
         menu = QMenu()
         menu.setToolTipsVisible(True)
 
-        # Connection setup — the two things the overlay needs to find drafts.
+        # Connection setup — the things the overlay needs to find drafts.
         for text, slot in (
             ("Enter MTGO username", self._prompt_username),
             ("Change log folder", self._prompt_log_folder),
+            ("Setup status…", self._show_setup_status),
         ):
             action = QAction(text, menu)
             action.triggered.connect(slot)
@@ -778,12 +832,15 @@ class AppController(QObject):
         menu.addAction(clear_action)
 
         menu.addSeparator()
+        about_action = QAction("About", menu)
+        about_action.triggered.connect(self._show_about)
+        menu.addAction(about_action)
+
         exit_action = QAction("Exit", menu)
         exit_action.triggered.connect(self._exit)
         menu.addAction(exit_action)
 
-        self._tray.setContextMenu(menu)
-        self._tray.show()
+        return menu
 
     def _on_supported_sets(self, filters: dict) -> None:
         self._filters = filters or {}
@@ -892,6 +949,55 @@ class AppController(QObject):
             self.settings.log_dir = folder
             self.settings.save()
             self._restart_watcher()
+
+    def _show_setup_status(self) -> None:
+        from PySide6.QtWidgets import QMessageBox
+
+        if self.settings.use_live_17lands:
+            ratings = "live 17lands"
+        elif self.settings.manual_csv_path:
+            ratings = f"CSV ({self.settings.manual_csv_path})"
+        else:
+            ratings = "not set"
+        lines = (
+            f"MTGO username: {self.settings.mtgo_username or 'not set'}",
+            f"Log folder: {self.settings.log_dir or 'not set'}",
+            f"Privacy notice accepted: {'yes' if self.settings.accepted_disclaimer else 'no'}",
+            f"Ratings source: {ratings}",
+        )
+        missing = self._missing_setup()
+        box = QMessageBox()
+        box.setWindowTitle("Setup status")
+        box.setText("Ready to track drafts." if not missing else "Setup is incomplete.")
+        box.setInformativeText("\n".join(lines))
+        run_btn = box.addButton("Run setup wizard", QMessageBox.AcceptRole)
+        box.addButton("Close", QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is run_btn:
+            run_onboarding(self.settings)
+            self._refresh_tray()
+            self._restart_watcher()
+
+    def _show_about(self) -> None:
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QMessageBox
+
+        repo = "https://github.com/g0dnerd/mtgo_overlay"
+        box = QMessageBox()
+        box.setWindowTitle("About MTGO 17lands Overlay")
+        box.setTextFormat(Qt.RichText)
+        box.setText(
+            f"<b>MTGO 17lands Overlay</b><br>Version {__version__}<br><br>"
+            "Draws 17Lands Game-in-Hand win rates onto the MTGO draft pick view."
+        )
+        box.setInformativeText(
+            "Not affiliated with, endorsed by, or sponsored by 17Lands or Wizards "
+            "of the Coast.<br><br>"
+            f"Open source (GPL-3.0): <a href=\"{repo}\">{repo}</a><br><br>"
+            "Win-rate data courtesy of 17Lands. Card data &amp; images courtesy of "
+            "Scryfall."
+        )
+        box.exec()
 
     def _prompt_clear_data(self) -> None:
         from PySide6.QtWidgets import QMessageBox
