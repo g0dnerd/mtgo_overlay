@@ -15,6 +15,7 @@ uv run pyinstaller `
     --name MtgoOverlay `
     --icon assets/tray.ico `
     --add-data "assets;assets" `
+    --collect-submodules PySide6.QtSvg `
     run.py
 
 Write-Host "Built dist\MtgoOverlay.exe"

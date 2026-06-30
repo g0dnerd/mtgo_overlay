@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from mtgo_overlay.app import (
+    _set_icon,
     build_label_specs,
     expansion_from_log_path,
     map_capture_to_logical,
@@ -64,6 +65,31 @@ def test_build_label_specs_scales_with_dpr():
 def test_expansion_from_log_path():
     assert expansion_from_log_path("C:/logs/User-replayMH3.txt") == "MH3"
     assert expansion_from_log_path("/var/x/Whatever-blb.txt") == "BLB"
+
+
+def test_set_icon_uncached_returns_empty(qapp, tmp_path, monkeypatch):
+    monkeypatch.setenv("MTGO_OVERLAY_HOME", str(tmp_path))
+    from PySide6.QtGui import QColor
+
+    assert _set_icon("ZZZ", QColor("white")).isNull()
+
+
+def test_set_icon_renders_cached_svg(qapp, tmp_path, monkeypatch):
+    monkeypatch.setenv("MTGO_OVERLAY_HOME", str(tmp_path))
+    from PySide6.QtGui import QColor
+
+    from mtgo_overlay.recognition import scryfall_art
+    from mtgo_overlay.system import paths
+
+    icon_path = scryfall_art._icon_path("XYZ", paths.scryfall_cache_dir())
+    icon_path.parent.mkdir(parents=True, exist_ok=True)
+    icon_path.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+        '<rect width="10" height="10" fill="#000"/></svg>'
+    )
+    icon = _set_icon("XYZ", QColor("white"))
+    assert not icon.isNull()
+    assert icon.availableSizes()
 
 
 def test_app_module_imports():

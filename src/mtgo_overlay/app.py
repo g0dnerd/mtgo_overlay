@@ -117,6 +117,73 @@ def expansion_from_log_path(path: str) -> str:
     return sets.expansion_from_log_code(code)
 
 
+def _set_icon(code: str, color):
+    """A theme-tinted QIcon for a set's cached symbol SVG, or an empty QIcon.
+
+    Scryfall symbols are solid black, so they're recolored to ``color`` (the
+    menu's text color) via a source-in composite to stay visible on any theme.
+    """
+    from PySide6.QtCore import QSize, Qt
+    from PySide6.QtGui import QIcon, QPainter, QPixmap
+
+    try:
+        from PySide6.QtSvg import QSvgRenderer
+    except ImportError:  # QtSvg not bundled -> picker falls back to text-only
+        return QIcon()
+
+    path = scryfall_art.cached_set_icon(code)
+    if path is None:
+        return QIcon()
+    renderer = QSvgRenderer(str(path))
+    if not renderer.isValid():
+        return QIcon()
+    size = QSize(16, 16)
+    pixmap = QPixmap(size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    renderer.render(painter, pixmap.rect().toRectF())
+    painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+    painter.fillRect(pixmap.rect(), color)
+    painter.end()
+    return QIcon(pixmap)
+
+
+def _pick_set(codes: list[str], parent=None) -> str | None:
+    """Modal set picker: a combo of ``codes`` each prefixed by its symbol.
+
+    Returns the chosen uppercase code, or ``None`` if cancelled / empty.
+    """
+    from PySide6.QtWidgets import (
+        QComboBox,
+        QDialog,
+        QDialogButtonBox,
+        QFormLayout,
+    )
+
+    dialog = QDialog(parent)
+    dialog.setWindowTitle("Pre-download a set")
+    combo = QComboBox(dialog)
+    combo.setEditable(True)
+    text_color = combo.palette().text().color()
+    for code in codes:
+        combo.addItem(_set_icon(code, text_color), code)
+
+    buttons = QDialogButtonBox(
+        QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog
+    )
+    buttons.accepted.connect(dialog.accept)
+    buttons.rejected.connect(dialog.reject)
+
+    layout = QFormLayout(dialog)
+    layout.addRow("Set:", combo)
+    layout.addRow(buttons)
+
+    if dialog.exec() != QDialog.Accepted:
+        return None
+    code = combo.currentText().strip().upper()
+    return code or None
+
+
 # --- recognition worker -----------------------------------------------------
 
 
@@ -294,6 +361,11 @@ class _SupportedSetsWorker(QRunnable):
         except Exception as exc:  # noqa: BLE001 - worker boundary
             _log.warning("Supported-set list load failed: %s", exc)
             filters = {}
+        try:
+            codes = expansions.codes_newest_first(filters, mtgo_only=True)
+            scryfall_art.ensure_set_icons(codes)
+        except Exception as exc:  # noqa: BLE001 - icons are cosmetic
+            _log.warning("Set-icon warm failed: %s", exc)
         self.signals.labelsReady.emit(filters)
 
 
@@ -656,20 +728,8 @@ class AppController(QObject):
         )
 
     def _prompt_download_set(self) -> None:
-        from PySide6.QtWidgets import QInputDialog
-
         codes = expansions.codes_newest_first(self._filters, mtgo_only=True)
-        code, ok = QInputDialog.getItem(
-            None,
-            "Pre-download a set",
-            "Set:",
-            codes,
-            0,
-            True,
-        )
-        if not ok:
-            return
-        code = code.strip().upper()
+        code = _pick_set(codes)
         if code:
             self._prefetch_set(code)
 

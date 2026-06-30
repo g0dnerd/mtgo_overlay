@@ -286,6 +286,59 @@ def fetch_artwork(ref: ArtRef, cache_dir: Path) -> Path:
     return out
 
 
+def _icon_path(code: str, cache_dir: Path) -> Path:
+    return Path(cache_dir) / "icons" / f"{code.upper()}.svg"
+
+
+def fetch_set_icon(code: str, cache_dir: Path | None = None) -> Path | None:
+    """Cache-first download of a set's symbol SVG; ``None`` if unavailable.
+
+    Resolves the symbol via ``/sets/<code>`` (10/s endpoint) then pulls the SVG
+    from the unlimited image origin. SVGs are immutable, so they're cached
+    indefinitely under ``icons/<CODE>.svg``.
+    """
+    cache_dir = cache_dir or paths.scryfall_cache_dir()
+    out = _icon_path(code, cache_dir)
+    if out.exists():
+        return out
+    try:
+        meta = _http_get(f"{SCRYFALL_API}/sets/{code.lower()}").json()
+        svg_uri = meta.get("icon_svg_uri")
+        if not svg_uri:
+            return None
+        svg = _http_get(svg_uri).content
+    except requests.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 404:
+            return None
+        raise
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_suffix(".svg.tmp")
+    tmp.write_bytes(svg)
+    os.replace(tmp, out)
+    return out
+
+
+def cached_set_icon(code: str, cache_dir: Path | None = None) -> Path | None:
+    """The local symbol-SVG path for ``code`` if already cached, else ``None``."""
+    cache_dir = cache_dir or paths.scryfall_cache_dir()
+    path = _icon_path(code, cache_dir)
+    return path if path.exists() else None
+
+
+def ensure_set_icons(codes: list[str], cache_dir: Path | None = None) -> None:
+    """Warm the symbol-SVG cache for ``codes`` (run off the UI thread).
+
+    Best-effort: a per-set failure is logged and skipped so one bad code never
+    starves the rest of the picker's icons.
+    """
+    cache_dir = cache_dir or paths.scryfall_cache_dir()
+    for code in codes:
+        try:
+            fetch_set_icon(code, cache_dir)
+        except requests.RequestException as exc:
+            _log.warning("Set icon fetch failed for %s: %s", code, exc)
+
+
 def ensure_set_artwork(
     expansion: str, names: list[str], cache_dir: Path | None = None
 ) -> None:
