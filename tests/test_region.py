@@ -22,6 +22,20 @@ def test_robust_size_filter_drops_outliers():
     assert len(kept) == 6
 
 
+def test_robust_size_filter_keeps_grid_when_mad_collapses():
+    # A clean pack: 8 cards at one exact area + 6 a pixel taller. >half share an
+    # area so the MAD is 0; the relative-band fallback must keep all 14 (and still
+    # drop a junk partial-detection), not just the exact-modal-area row.
+    boxes = (
+        [BBox(0, 0, 221, 308) for _ in range(8)]
+        + [BBox(0, 0, 221, 310) for _ in range(6)]
+        + [BBox(0, 0, 80, 117)]  # junk
+    )
+    kept = region.robust_size_filter(boxes, mad_factor=3.0)
+    assert len(kept) == 14
+    assert BBox(0, 0, 80, 117) not in kept
+
+
 def test_merge_overlapping_keeps_largest():
     big = BBox(0, 0, 100, 140)
     nested = BBox(2, 2, 96, 136)  # high IoU with big
@@ -152,14 +166,21 @@ def test_detect_slots_on_real_screenshot(png, gt_path):
     assert recall >= 0.7, f"recall={recall:.2f} precision={precision:.2f} on {png.name}"
 
 
-# --- drafted-pool exclusion (the band-split regression) ---------------------
+# --- exact pack recovery: pool excluded, every pack card kept ---------------
+# These fixtures have pack-only ground truth and exercise both the band split
+# (drop the drafted pool) and the empty-pool case (keep the whole pack even when
+# the bottom row renders a pixel taller and the MAD collapses to 0).
 
-_DRAFTED_FIXTURES = [p for p in _FIXTURES if "with_drafted" in p[0].name]
+_PACK_ONLY_FIXTURES = [
+    p for p in _FIXTURES if p[0].name in {
+        "with_drafted.png", "with_drafted_pick_3.png", "p1p1_empty_pool.png"
+    }
+]
 
 
-@pytest.mark.skipif(not _DRAFTED_FIXTURES, reason="drafted-pool fixtures absent")
-@pytest.mark.parametrize("png,gt_path", _DRAFTED_FIXTURES)
-def test_detect_slots_excludes_drafted_pool(png, gt_path):
+@pytest.mark.skipif(not _PACK_ONLY_FIXTURES, reason="pack-only fixtures absent")
+@pytest.mark.parametrize("png,gt_path", _PACK_ONLY_FIXTURES)
+def test_detect_slots_recovers_exact_pack(png, gt_path):
     import cv2
 
     screen = cv2.imread(str(png))
@@ -168,8 +189,7 @@ def test_detect_slots_excludes_drafted_pool(png, gt_path):
     precision, recall = slot_precision_recall(
         [s.bbox for s in slots], gt.boxes, iou_thresh=0.5
     )
-    # precision == 1.0: nothing from the drafted-pool band below the pack leaked in.
-    # recall == 1.0: every pack card located.
-    assert precision == 1.0, f"pool box leaked: precision={precision:.2f} on {png.name}"
+    # precision == 1.0: no pool box leaked in. recall == 1.0: every pack card kept.
+    assert precision == 1.0, f"extra box: precision={precision:.2f} on {png.name}"
     assert recall == 1.0, f"missed a pack card: recall={recall:.2f} on {png.name}"
     assert len(slots) == len(gt.cards)

@@ -26,6 +26,9 @@ class RecognitionConfig:
     min_card_area_frac: float = 0.0015
     max_card_area_frac: float = 0.30
     size_mad_factor: float = 3.0       # reject boxes > N MADs from modal card area
+    # Fallback band (fraction of modal area) when a uniform grid collapses the MAD
+    # to 0; keeps cards differing by a pixel or two while still dropping junk.
+    size_rel_tol: float = 0.5
 
     # --- de-dup + lattice ---
     merge_iou: float = 0.45            # NMS threshold for duplicate contours

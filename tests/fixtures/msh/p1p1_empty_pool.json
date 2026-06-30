@@ -1,0 +1,136 @@
+{
+  "expansion": "MSH",
+  "format": "PremierDraft",
+  "screen_size": [
+    1920,
+    1200
+  ],
+  "cards": [
+    {
+      "name": "Ironheart, Clever Champion",
+      "bbox": [
+        16,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Vision Quest",
+      "bbox": [
+        247,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Iron Lad, Diverging Destiny",
+      "bbox": [
+        478,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Ronin, Shadow Stalker",
+      "bbox": [
+        709,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "S.H.I.E.L.D. Helicarrier",
+      "bbox": [
+        940,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "White Widow, Free Agent",
+      "bbox": [
+        1171,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Blazing Crescendo",
+      "bbox": [
+        1402,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "HYDRA Troopers",
+      "bbox": [
+        1633,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Hydraulic Helper",
+      "bbox": [
+        16,
+        424,
+        221,
+        310
+      ]
+    },
+    {
+      "name": "Savage Land Dinosaur",
+      "bbox": [
+        247,
+        424,
+        221,
+        310
+      ]
+    },
+    {
+      "name": "Take Up the Shield",
+      "bbox": [
+        478,
+        424,
+        221,
+        310
+      ]
+    },
+    {
+      "name": "Volcanic Villain",
+      "bbox": [
+        709,
+        424,
+        221,
+        310
+      ]
+    },
+    {
+      "name": "We Say Thee Nay!",
+      "bbox": [
+        940,
+        424,
+        221,
+        310
+      ]
+    },
+    {
+      "name": "Asgardian Citadel",
+      "bbox": [
+        1171,
+        424,
+        221,
+        310
+      ]
+    }
+  ]
+}

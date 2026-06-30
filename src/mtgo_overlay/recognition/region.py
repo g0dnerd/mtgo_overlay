@@ -56,16 +56,23 @@ def candidate_boxes(screen: np.ndarray, cfg: RecognitionConfig) -> list[BBox]:
     return out
 
 
-def robust_size_filter(boxes: list[BBox], mad_factor: float) -> list[BBox]:
-    """Drop boxes whose area is > ``mad_factor`` MADs from the modal card area."""
+def robust_size_filter(
+    boxes: list[BBox], mad_factor: float, rel_tol: float = 0.5
+) -> list[BBox]:
+    """Drop boxes whose area is far from the modal card area.
+
+    Normally the band is ``mad_factor`` MADs wide. A clean uniform grid (the pack)
+    makes >half the boxes share an *exact* area, collapsing the MAD to 0; there we
+    fall back to a relative band (``rel_tol`` of the modal area) rather than exact
+    equality, so a row that renders a pixel or two taller isn't silently dropped.
+    """
     if len(boxes) < 3:
         return list(boxes)
     areas = np.array([b.area for b in boxes], dtype=float)
     median = float(np.median(areas))
     mad = float(np.median(np.abs(areas - median)))
-    if mad == 0.0:
-        return [b for b, a in zip(boxes, areas) if a == median]
-    return [b for b, a in zip(boxes, areas) if abs(a - median) <= mad_factor * mad]
+    tol = mad_factor * mad if mad != 0.0 else rel_tol * median
+    return [b for b, a in zip(boxes, areas) if abs(a - median) <= tol]
 
 
 def merge_overlapping(boxes: list[BBox], iou_thresh: float) -> list[BBox]:
@@ -273,7 +280,7 @@ def detect_slots(
         len(all_rows), len(band), len(band_boxes),
     )
 
-    boxes = robust_size_filter(band_boxes, cfg.size_mad_factor)
+    boxes = robust_size_filter(band_boxes, cfg.size_mad_factor, cfg.size_rel_tol)
     _log.debug(
         "Candidates on %dx%d: %d raw -> %d after NMS -> %d in pack band -> %d after size filter.",
         w, h, len(raw), len(merged), len(band_boxes), len(boxes),
