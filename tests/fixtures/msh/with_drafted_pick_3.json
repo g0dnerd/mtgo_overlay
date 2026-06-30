@@ -1,0 +1,118 @@
+{
+  "expansion": "MSH",
+  "format": "PremierDraft",
+  "screen_size": [
+    1920,
+    1200
+  ],
+  "cards": [
+    {
+      "name": "Origin of the Avengers",
+      "bbox": [
+        16,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Ant-Man, Colony Commander",
+      "bbox": [
+        247,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Justice, Vance Astrovik",
+      "bbox": [
+        478,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Thor Odinson",
+      "bbox": [
+        709,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Atlantis Attacks",
+      "bbox": [
+        940,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Crimson Operative",
+      "bbox": [
+        1171,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Lightning Strike",
+      "bbox": [
+        1402,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Powerful Broker",
+      "bbox": [
+        1633,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Project Deathlok Soldier",
+      "bbox": [
+        16,
+        424,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Serpent Specialist",
+      "bbox": [
+        247,
+        424,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Wakandan Royal Guard",
+      "bbox": [
+        478,
+        424,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Mountain",
+      "bbox": [
+        709,
+        424,
+        221,
+        308
+      ]
+    }
+  ]
+}

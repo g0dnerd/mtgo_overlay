@@ -40,6 +40,32 @@ def test_cluster_rows_groups_and_sorts():
     assert [b.x for b in rows[1]] == [0, 150]
 
 
+def test_select_pack_band_single_row_unchanged():
+    rows = [[BBox(0, 0, 70, 100), BBox(100, 0, 70, 100)]]
+    assert region.select_pack_band(rows, median_h=100, gap_frac=0.15) == rows
+
+
+def test_select_pack_band_keeps_tight_multirow_pack():
+    # Intra-pack edge gap ~0.03 x card height (rows tightly stacked) -> kept whole.
+    rows = [[BBox(0, 0, 70, 100)], [BBox(0, 103, 70, 100)]]
+    assert region.select_pack_band(rows, 100, 0.15) == rows
+
+
+def test_select_pack_band_drops_pool_below_wide_gap():
+    # Pack then a drafted-pool row across a ~0.28 x h gap (full-size pool) -> dropped.
+    pack = [BBox(0, 0, 70, 100)]
+    pool = [BBox(0, 128, 70, 100)]
+    assert region.select_pack_band([pack, pool], 100, 0.15) == [pack]
+
+
+def test_select_pack_band_threshold_pins_band_gap_frac():
+    pack = [BBox(0, 0, 70, 100)]
+    near = [BBox(0, 114, 70, 100)]  # edge gap 0.14 x h -> kept
+    far = [BBox(0, 116, 70, 100)]   # edge gap 0.16 x h -> dropped
+    assert region.select_pack_band([pack, near], 100, 0.15) == [pack, near]
+    assert region.select_pack_band([pack, far], 100, 0.15) == [pack]
+
+
 def test_fill_row_gaps_synthesizes_missing_interior():
     # Columns at x-centers 50, 150, [250 missing], 350. Pitch=100 from the
     # adjacent 50->150 pair; the 150->350 gap is 2x pitch -> one synthesized box.
@@ -124,3 +150,26 @@ def test_detect_slots_on_real_screenshot(png, gt_path):
     )
     # Tune thresholds against your real data; start by just asserting it finds most.
     assert recall >= 0.7, f"recall={recall:.2f} precision={precision:.2f} on {png.name}"
+
+
+# --- drafted-pool exclusion (the band-split regression) ---------------------
+
+_DRAFTED_FIXTURES = [p for p in _FIXTURES if "with_drafted" in p[0].name]
+
+
+@pytest.mark.skipif(not _DRAFTED_FIXTURES, reason="drafted-pool fixtures absent")
+@pytest.mark.parametrize("png,gt_path", _DRAFTED_FIXTURES)
+def test_detect_slots_excludes_drafted_pool(png, gt_path):
+    import cv2
+
+    screen = cv2.imread(str(png))
+    gt = GroundTruth.load(gt_path)
+    slots = region.detect_slots(screen, RecognitionConfig(), len(gt.cards))
+    precision, recall = slot_precision_recall(
+        [s.bbox for s in slots], gt.boxes, iou_thresh=0.5
+    )
+    # precision == 1.0: nothing from the drafted-pool band below the pack leaked in.
+    # recall == 1.0: every pack card located.
+    assert precision == 1.0, f"pool box leaked: precision={precision:.2f} on {png.name}"
+    assert recall == 1.0, f"missed a pack card: recall={recall:.2f} on {png.name}"
+    assert len(slots) == len(gt.cards)

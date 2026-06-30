@@ -77,6 +77,29 @@ def merge_overlapping(boxes: list[BBox], iou_thresh: float) -> list[BBox]:
     return kept
 
 
+def select_pack_band(
+    rows: list[list[BBox]], median_h: int, gap_frac: float
+) -> list[list[BBox]]:
+    """Keep the topmost contiguous band of rows, cutting at the first large gap.
+
+    ``rows`` come top->bottom from :func:`cluster_rows`. The pack is always the top
+    band in MTGO's draft view; the drafted pool sits below a wide vertical gap. Cut
+    there so pool boxes can't pollute the modal-size filter or reach the assignment.
+    The separator is the inter-row *edge* gap as a fraction of card height, so it's
+    scale-invariant (pool cards can render at full pack-card size).
+    """
+    if not rows:
+        return []
+    kept = [rows[0]]
+    for prev, cur in zip(rows, rows[1:]):
+        prev_bottom = max(b.y2 for b in prev)
+        cur_top = min(b.y for b in cur)
+        if cur_top - prev_bottom > gap_frac * median_h:
+            break
+        kept.append(cur)
+    return kept
+
+
 def cluster_rows(boxes: list[BBox], tol: float) -> list[list[BBox]]:
     """Group boxes into rows by center-y proximity; sort rows top->bottom and
     each row left->right."""
@@ -234,11 +257,26 @@ def detect_slots(
     """Full pipeline: edges -> candidates -> clean grid of :class:`Slot`."""
     raw = candidate_boxes(screen, cfg)
     merged = merge_overlapping(raw, cfg.merge_iou)
-    boxes = robust_size_filter(merged, cfg.size_mad_factor)
     h, w = screen.shape[:2]
+    if not merged:
+        _log.warning("No card candidates found.")
+        return []
+
+    # Drop the drafted pool before the modal-size filter: the pool can outnumber
+    # the pack and shift the median area onto pool cards, so band-split first.
+    rough_h = int(np.median([b.h for b in merged]))
+    all_rows = cluster_rows(merged, tol=cfg.row_tol_frac * rough_h)
+    band = select_pack_band(all_rows, rough_h, cfg.band_gap_frac)
+    band_boxes = [b for row in band for b in row]
     _log.debug(
-        "Candidates on %dx%d: %d raw -> %d after NMS -> %d after size filter.",
-        w, h, len(raw), len(merged), len(boxes),
+        "Band split: %d row(s) detected -> kept top %d as pack (%d boxes).",
+        len(all_rows), len(band), len(band_boxes),
+    )
+
+    boxes = robust_size_filter(band_boxes, cfg.size_mad_factor)
+    _log.debug(
+        "Candidates on %dx%d: %d raw -> %d after NMS -> %d in pack band -> %d after size filter.",
+        w, h, len(raw), len(merged), len(band_boxes), len(boxes),
     )
     if not boxes:
         _log.warning("No card candidates found.")

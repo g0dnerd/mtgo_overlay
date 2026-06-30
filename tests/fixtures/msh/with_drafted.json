@@ -1,0 +1,46 @@
+{
+  "expansion": "MSH",
+  "format": "PremierDraft",
+  "screen_size": [
+    1920,
+    1140
+  ],
+  "cards": [
+    {
+      "name": "Kree Commandos",
+      "bbox": [
+        16,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Machinesmith Automaton",
+      "bbox": [
+        247,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Vision of Love",
+      "bbox": [
+        478,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Plains",
+      "bbox": [
+        709,
+        105,
+        221,
+        308
+      ]
+    }
+  ]
+}

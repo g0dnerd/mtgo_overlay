@@ -30,6 +30,10 @@ class RecognitionConfig:
     # --- de-dup + lattice ---
     merge_iou: float = 0.45            # NMS threshold for duplicate contours
     row_tol_frac: float = 0.5          # row grouping tol, as fraction of card height
+    # Inter-row edge gap (x median card height) above which the band below is the
+    # drafted pool, not more pack rows. Sits above the intra-pack gap (~0.026) and
+    # below the tightest observed pack->pool gap (~0.28).
+    band_gap_frac: float = 0.15
 
     # --- template matching ---
     template_w: int = 100              # canonical template/slot width (px)

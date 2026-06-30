@@ -48,6 +48,10 @@ _log = logging_setup.get_logger("app")
 
 PICKS_PER_DRAFT = 42
 
+# Wait this long after the debounce before capturing, so MTGO has finished
+# loading the new pack's card art (capturing too early yields a blank grid).
+_RECOGNITION_SETTLE_MS = 75
+
 
 # --- pure helpers (unit-tested) --------------------------------------------
 
@@ -490,18 +494,33 @@ class AppController(QObject):
         if hwnd is None:
             _log.warning("Cannot recognize: MTGO window not found.")
             return
+        # Capturing a backgrounded window yields a black/stale frame, so skip the
+        # doomed work; the refocus handler re-runs recognition when MTGO returns.
+        if win32.get_foreground_hwnd() != hwnd:
+            _log.info("MTGO not focused — deferring recognition until refocus.")
+            return
         self._generation += 1
+        gen = self._generation
+        names = list(self.log.current_pack)
         _log.info(
             "Recognizing pack of %d card(s) (gen %d) for %s/%s.",
-            len(self.log.current_pack),
-            self._generation,
+            len(names),
+            gen,
             self.expansion,
             self.settings.fmt,
         )
+        QTimer.singleShot(
+            _RECOGNITION_SETTLE_MS,
+            lambda: self._start_recognition_worker(gen, hwnd, names),
+        )
+
+    def _start_recognition_worker(
+        self, generation: int, hwnd: int, names: list[str]
+    ) -> None:
         worker = RecognitionWorker(
-            self._generation,
+            generation,
             hwnd,
-            list(self.log.current_pack),
+            names,
             self.expansion,
             self.settings.fmt,
             self.repo,
@@ -575,6 +594,10 @@ class AppController(QObject):
             "shown" if focused else "hidden",
         )
         self.overlay.setVisible(focused)
+        # A pick that landed while MTGO was backgrounded was deferred, not run, so
+        # re-recognize on refocus to populate the now-visible overlay.
+        if focused and self.log is not None and self.log.current_pack:
+            self._schedule_recognition()
 
     # --- tray ----------------------------------------------------------------
 
