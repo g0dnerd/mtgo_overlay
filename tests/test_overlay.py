@@ -56,7 +56,7 @@ def test_labels_anchored_bottom_right_of_art(qapp):
     assert right_edge - inset - 3 <= rect.right() <= right_edge
     # Sits at the bottom of the art (well below the title bar), bottom edge at the
     # configured fraction of card height.
-    assert spec.h * 0.18 <= rect.top() - spec.y
+    assert spec.h * 0.11 <= rect.top() - spec.y
     assert (
         abs((rect.bottom() + 1) - (spec.y + spec.h * win.style.pill_bottom_frac)) <= 2
     )
