@@ -122,8 +122,10 @@ class _StubClient:
     def __init__(self, data=None, error=None):
         self._data = data or []
         self._error = error
+        self.calls: list[dict] = []
 
-    def fetch_ratings(self, expansion, fmt, **_):
+    def fetch_ratings(self, expansion, fmt, **kw):
+        self.calls.append({"expansion": expansion, "fmt": fmt, **kw})
         if self._error:
             raise self._error
         return self._data
@@ -179,6 +181,36 @@ def test_repo_live_failure_falls_back_to_csv(tmp_path, fixtures_dir):
     csv = fixtures_dir / "ratings" / "sample_card_ratings.csv"
     path = repo.ensure("mh3", "PremierDraft", use_live=True, csv_path=csv)
     assert json.loads(path.read_text())["source"] == "csv"
+
+
+def test_repo_live_all_null_falls_back_to_csv(tmp_path, fixtures_dir):
+    # A 200 whose every WR is null (empty date window) must not be cached as data.
+    all_null = [{"name": "Card A", "ever_drawn_win_rate": None}]
+    repo = _repo(tmp_path, client=_StubClient(data=all_null))
+    csv = fixtures_dir / "ratings" / "sample_card_ratings.csv"
+    path = repo.ensure("mh3", "PremierDraft", use_live=True, csv_path=csv)
+    assert json.loads(path.read_text())["source"] == "csv"
+
+
+def test_repo_live_passes_lifetime_window(tmp_path, fixtures_dir):
+    data = json.loads((fixtures_dir / "ratings" / "sample_17lands.json").read_text())
+    client = _StubClient(data=data)
+    # Fixed clock -> deterministic end_date.
+    repo = _repo(tmp_path, client=client, time_fn=lambda: 1_700_000_000.0)
+    repo.ensure("mh3", "PremierDraft", use_live=True, start_date="2024-06-11")
+    call = client.calls[-1]
+    assert call["start_date"] == "2024-06-11"
+    assert call["end_date"] == "2023-11-14"  # gmtime(1.7e9)
+
+
+def test_repo_live_no_start_date_omits_window(tmp_path, fixtures_dir):
+    data = json.loads((fixtures_dir / "ratings" / "sample_17lands.json").read_text())
+    client = _StubClient(data=data)
+    repo = _repo(tmp_path, client=client)
+    repo.ensure("mh3", "PremierDraft", use_live=True)
+    call = client.calls[-1]
+    assert call["start_date"] is None
+    assert call["end_date"] is None
 
 
 def test_repo_keeps_stale_when_refresh_fails(tmp_path, fixtures_dir):
@@ -237,3 +269,32 @@ def test_repo_csv_cache_reused_when_unchanged(tmp_path, fixtures_dir):
     csv = fixtures_dir / "ratings" / "sample_card_ratings.csv"
     repo.ensure("mh3", "PremierDraft", use_live=False, csv_path=csv)
     assert repo._csv_cache_current("mh3", "PremierDraft", csv)
+
+
+@pytest.mark.skipif(
+    not os.environ.get("MTGO_OVERLAY_LIVE_17LANDS"),
+    reason="set MTGO_OVERLAY_LIVE_17LANDS=1 to run the live 17lands fetch",
+)
+def test_live_17lands_current_set_has_ratings(tmp_path):
+    """End-to-end against the real endpoint: the currently-live premier set, fetched
+    over its lifetime window, yields actual (non-null) win rates."""
+    from mtgo_overlay.config.settings import Settings
+    from mtgo_overlay.data.expansions import format_for
+
+    client = SeventeenLandsClient(Settings().user_agent)
+    filters = client.fetch_filters()
+    live = filters.get("live_formats_by_expansion", {})
+    premier = next(
+        (exp for exp, fmts in live.items() if "PremierDraft" in fmts), None
+    )
+    assert premier, f"no premier-live set in {list(live)}"
+    fmt = format_for(premier, "PremierDraft", filters)
+    start = filters["start_dates"][premier][:10]
+
+    repo = RatingsRepository(tmp_path, client=client)
+    path = repo.ensure(premier, fmt, use_live=True, start_date=start)
+
+    payload = json.loads(path.read_text())
+    assert payload["source"] == "17lands"
+    rated = [v for v in payload["ratings"].values() if isinstance(v, (int, float))]
+    assert rated, f"{premier}/{fmt} returned no rated cards"

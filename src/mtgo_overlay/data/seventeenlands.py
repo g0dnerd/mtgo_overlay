@@ -25,7 +25,7 @@ class SeventeenLandsClient:
         self,
         user_agent: str,
         *,
-        timeout: float = 10.0,
+        timeout: float = 30.0,
         session: requests.Session | None = None,
     ) -> None:
         self.user_agent = user_agent

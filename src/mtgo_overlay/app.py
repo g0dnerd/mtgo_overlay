@@ -241,13 +241,14 @@ class RecognitionWorker(QRunnable):
 class _EnsureWorker(QRunnable):
     """Off-UI: warm the ratings cache + (owner's) artwork cache for a draft."""
 
-    def __init__(self, repo, expansion, fmt, names, settings, on_done):
+    def __init__(self, repo, expansion, fmt, names, settings, on_done, start_date=None):
         super().__init__()
         self.repo = repo
         self.expansion = expansion
         self.fmt = fmt
         self.names = names
         self.settings = settings
+        self.start_date = start_date
         self._on_done = on_done
         self.signals = _WorkerSignals()
         self.signals.labelsReady.connect(lambda _p: on_done())
@@ -269,6 +270,7 @@ class _EnsureWorker(QRunnable):
                 self.fmt,
                 use_live=self.settings.use_live_17lands,
                 csv_path=csv_path,
+                start_date=self.start_date,
             )
         except Exception as exc:  # noqa: BLE001
             _log.warning("Ratings ensure failed: %s", exc)
@@ -297,11 +299,12 @@ class _PrefetchWorker(QRunnable):
     per-pack). Ratings are best-effort: a 17lands hiccup never fails the slow,
     valuable art download."""
 
-    def __init__(self, expansion, fmt, repo, on_done):
+    def __init__(self, expansion, fmt, repo, on_done, start_date=None):
         super().__init__()
         self.expansion = expansion
         self.fmt = fmt
         self.repo = repo
+        self.start_date = start_date
         self.signals = _WorkerSignals()
         self.signals.labelsReady.connect(on_done)
 
@@ -329,7 +332,10 @@ class _PrefetchWorker(QRunnable):
         ratings_ok = True
         try:
             _log.info("Warming 17lands ratings for %s/%s...", self.expansion, self.fmt)
-            self.repo.ensure(self.expansion, self.fmt, use_live=True, csv_path=None)
+            self.repo.ensure(
+                self.expansion, self.fmt, use_live=True, csv_path=None,
+                start_date=self.start_date,
+            )
         except Exception as exc:  # noqa: BLE001 - ratings is best-effort here
             ratings_ok = False
             _log.warning(
@@ -520,6 +526,12 @@ class AppController(QObject):
         if self.log.current_pack:
             self._prepare_draft_data()
 
+    def _start_date_for(self, expansion: str) -> str | None:
+        """The set's 17lands start date (``YYYY-MM-DD``) for a lifetime-spanning
+        live fetch, or ``None`` if the supported-set list isn't loaded yet."""
+        raw = self._filters.get("start_dates", {}).get(expansion.upper())
+        return raw[:10] if isinstance(raw, str) and raw else None
+
     def _prepare_draft_data(self) -> None:
         """Warm ratings + artwork for the current pack, then recognize. Runs once
         per draft, as soon as a non-empty pack is known."""
@@ -531,6 +543,7 @@ class AppController(QObject):
             self.log.current_pack,
             self.settings,
             self._schedule_recognition,
+            start_date=self._start_date_for(self.expansion),
         )
         self.pool.start(worker)
 
@@ -745,7 +758,10 @@ class AppController(QObject):
                 f"minute or two; watch the terminal/log for progress.",
             )
         self.pool.start(
-            _PrefetchWorker(expansion, fmt, self.repo, self._on_prefetch_done)
+            _PrefetchWorker(
+                expansion, fmt, self.repo, self._on_prefetch_done,
+                start_date=self._start_date_for(expansion),
+            )
         )
 
     def _on_prefetch_done(self, result: dict) -> None:

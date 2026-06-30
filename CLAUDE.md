@@ -32,8 +32,9 @@ QT_QPA_PLATFORM=offscreen uv run pytest tests/ -q
 # single test / file
 QT_QPA_PLATFORM=offscreen uv run pytest tests/test_region.py::test_cluster_rows_groups_and_sorts -q
 
-# the one networked test (live Scryfall, rate-limited) is gated behind an env flag
+# networked tests (rate-limited) are each gated behind an env flag
 MTGO_OVERLAY_LIVE_SCRYFALL=1 QT_QPA_PLATFORM=offscreen uv run pytest tests/test_pipeline.py -q
+MTGO_OVERLAY_LIVE_17LANDS=1 QT_QPA_PLATFORM=offscreen uv run pytest tests/test_data.py -q
 
 # recognition dev loop in WSL (no MTGO, no Scryfall): detect + annotate a screenshot
 uv run python tools/annotate_preview.py shot.png --expected 15 --boxes-only
@@ -103,5 +104,6 @@ offline on the hot path. **Respect Scryfall's rate limit even when testing.**
 - **Log parser** (`draft/log_parser.py`) is a faithful port — behavior unchanged.
   It assumes an **8-player pod** (12 fixed header lines) and derives the expansion
   from the last 3 chars of the filename before `.txt`.
-- Tests are hermetic (no network); the only networked test is the env-gated live
-  identification test.
+- Tests are hermetic (no network); the only networked tests are the two
+  env-gated live ones (`MTGO_OVERLAY_LIVE_SCRYFALL` identification,
+  `MTGO_OVERLAY_LIVE_17LANDS` ratings fetch).

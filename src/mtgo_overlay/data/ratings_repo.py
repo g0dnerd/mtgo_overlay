@@ -124,6 +124,9 @@ class RatingsRepository:
 
     # --- acquisition ---------------------------------------------------------
 
+    def _today(self) -> str:
+        return time.strftime("%Y-%m-%d", time.gmtime(self._time()))
+
     def ensure(
         self,
         expansion: str,
@@ -131,11 +134,15 @@ class RatingsRepository:
         *,
         use_live: bool,
         csv_path: Path | None = None,
+        start_date: str | None = None,
     ) -> Path:
         """Make sure a <=24h-old ratings cache for ``expansion``/``fmt`` exists.
 
         Returns the cache path. Raises :class:`RatingsError` only when no source
-        (live, CSV, or stale cache) can produce anything.
+        (live, CSV, or stale cache) can produce anything. ``start_date``
+        (``YYYY-MM-DD``, the set's 17lands start) makes the live fetch span the
+        set's whole lifetime instead of 17lands' rolling default window, which is
+        empty for sets no longer in rotation.
         """
         path = self._cache_path(expansion, fmt)
         # A configured CSV is the source of truth: rebuild whenever its path or
@@ -161,8 +168,19 @@ class RatingsRepository:
 
         if use_live and self.client is not None:
             try:
-                data = self.client.fetch_ratings(expansion, fmt)
+                end_date = self._today() if start_date else None
+                data = self.client.fetch_ratings(
+                    expansion, fmt, start_date=start_date, end_date=end_date
+                )
                 ratings = SeventeenLandsClient.to_ratings_map(data)
+                if not any(v is not None for v in ratings.values()):
+                    # A 200 with every WR null (e.g. an empty date window for a
+                    # rotated-out set) is a miss, not data — fall back rather than
+                    # caching all-N/A and shadowing the CSV for 24h.
+                    raise SeventeenLandsError(
+                        f"no rated cards for {expansion}/{fmt} "
+                        f"(window {start_date or 'default'}..{end_date or 'now'})"
+                    )
                 _log.info("Fetched %d ratings from 17lands for %s/%s",
                           len(ratings), expansion, fmt)
                 return self._write_cache(expansion, fmt, ratings, source="17lands")
