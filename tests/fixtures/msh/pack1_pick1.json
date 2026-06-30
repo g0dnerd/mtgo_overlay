@@ -1,0 +1,136 @@
+{
+  "expansion": "MSH",
+  "format": "PremierDraft",
+  "screen_size": [
+    1920,
+    1140
+  ],
+  "cards": [
+    {
+      "name": "Avengers: Under Siege",
+      "bbox": [
+        16,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Captain America, Living Legend",
+      "bbox": [
+        247,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Ghost, Spectral Saboteur",
+      "bbox": [
+        478,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Mister Hyde, Monster Within",
+      "bbox": [
+        709,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Night Nurse, Healer of Heroes",
+      "bbox": [
+        940,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Helicarrier Strike",
+      "bbox": [
+        1171,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "HYDRA Infiltration",
+      "bbox": [
+        1402,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "K'un-Lun Warrior",
+      "bbox": [
+        1633,
+        105,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Serpent Specialist",
+      "bbox": [
+        16,
+        424,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "We Say Thee Nay!",
+      "bbox": [
+        247,
+        424,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Web Up",
+      "bbox": [
+        478,
+        424,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Widow's Bite",
+      "bbox": [
+        709,
+        424,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Widow's Bite",
+      "bbox": [
+        940,
+        424,
+        221,
+        308
+      ]
+    },
+    {
+      "name": "Island",
+      "bbox": [
+        1171,
+        424,
+        221,
+        308
+      ]
+    }
+  ]
+}

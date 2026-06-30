@@ -1,5 +1,11 @@
 # Data
-data/
+/data/
+
+# Local working inputs (real draft captures / ratings data live outside git;
+# trimmed copies under tests/fixtures/ are the tracked test data)
+/Screenshot*.png
+/draft_log.txt
+/card_ratings.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -127,6 +133,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.venv-win/
 env/
 venv/
 ENV/

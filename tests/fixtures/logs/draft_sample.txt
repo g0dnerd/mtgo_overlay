@@ -1,0 +1,34 @@
+Event #:      123456789
+Time:    20240601120000
+Players:
+    TestUser
+    Opponent1
+    Opponent2
+    Opponent3
+    Opponent4
+    Opponent5
+    Opponent6
+    Opponent7
+
+Pack 1 pick 1:
+    Aerie Auxiliary
+    --> Fanged Flames
+    Expanding Ooze
+    Nyxborn Hydra
+    Riddle Gate Gargoyle
+Picked: Fanged Flames
+
+Pack 1 pick 2:
+    Drowner of Truth
+    Worn Powerstone
+    --> Refurbished Familiar
+    Dog Umbra
+    Twisted Landscape
+Picked: Refurbished Familiar
+
+Pack 1 pick 3:
+    Estrid's Invocation
+    Golden-Tail Trainer
+    Muster the Departed
+    Gift of the Viper
+    Island
