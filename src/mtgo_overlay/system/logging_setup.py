@@ -6,6 +6,7 @@ use ``logging.getLogger(__name__)`` directly.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from . import paths
@@ -14,13 +15,20 @@ _LOGGER_NAME = "mtgo_overlay"
 _configured = False
 
 
-def setup(level: int = logging.INFO, *, to_file: bool = True) -> logging.Logger:
-    """Configure the root app logger once. Idempotent."""
+def setup(level: int | None = None, *, to_file: bool = True) -> logging.Logger:
+    """Configure the root app logger once. Idempotent.
+
+    With no explicit ``level``, ``MTGO_OVERLAY_DEBUG`` (any non-empty value)
+    selects DEBUG so detailed recognition diagnostics can be captured without a
+    code change; otherwise INFO.
+    """
     global _configured
     logger = logging.getLogger(_LOGGER_NAME)
     if _configured:
         return logger
 
+    if level is None:
+        level = logging.DEBUG if os.environ.get("MTGO_OVERLAY_DEBUG") else logging.INFO
     logger.setLevel(level)
     fmt = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s: %(message)s")
 

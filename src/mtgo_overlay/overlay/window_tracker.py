@@ -16,12 +16,14 @@ from ..system import win32
 
 FindHwnd = Callable[[], "int | None"]
 GetRect = Callable[[int], tuple[int, int, int, int]]
+GetForeground = Callable[[], "int | None"]
 
 
 class WindowTracker(QObject):
     moved = Signal(int, int, int, int)    # x, y, w, h — position changed only
     resized = Signal(int, int, int, int)  # x, y, w, h — size changed (re-recognize)
     lost = Signal()                        # MTGO window disappeared
+    focusChanged = Signal(bool)            # MTGO gained / lost foreground focus
 
     def __init__(
         self,
@@ -30,14 +32,17 @@ class WindowTracker(QObject):
         *,
         find_hwnd: FindHwnd = win32.find_mtgo_hwnd,
         get_rect: GetRect = win32.get_client_rect_on_screen,
+        get_foreground: GetForeground = win32.get_foreground_hwnd,
     ) -> None:
         super().__init__(parent)
         self._find_hwnd = find_hwnd
         self._get_rect = get_rect
+        self._get_foreground = get_foreground
         self._timer = QTimer(self)
         self._timer.setInterval(int(1000 / hz))
         self._timer.timeout.connect(self.poll)
         self._last: tuple[int, int, int, int] | None = None
+        self._focused: bool | None = None
         self.hwnd: int | None = None
 
     def start(self) -> None:
@@ -47,15 +52,30 @@ class WindowTracker(QObject):
         self._timer.stop()
 
     def poll(self) -> None:
-        hwnd = self._find_hwnd()
+        try:
+            hwnd = self._find_hwnd()
+        except Exception:  # noqa: BLE001 - win32 enumeration can throw transiently
+            hwnd = None
         if hwnd is None:
+            self._set_focused(False)  # nothing to focus -> hide the overlay
             if self._last is not None:
                 self.lost.emit()
             self._last = None
             self.hwnd = None
             return
 
-        rect = self._get_rect(hwnd)
+        try:
+            rect = self._get_rect(hwnd)
+        except Exception:  # noqa: BLE001 - window may be closing / mid-transition
+            return  # skip this tick; a later poll retries or reports it lost
+
+        # Focus can change without the rect changing (alt-tab), so check it before
+        # the unchanged-rect early-out below.
+        try:
+            self._set_focused(self._get_foreground() == hwnd)
+        except Exception:  # noqa: BLE001 - GetForegroundWindow can throw transiently
+            pass
+
         if rect == self._last:
             return
 
@@ -65,3 +85,8 @@ class WindowTracker(QObject):
             self.resized.emit(x, y, w, h)  # appeared or resized -> re-recognize
         else:
             self.moved.emit(x, y, w, h)  # only moved -> just reposition
+
+    def _set_focused(self, focused: bool) -> None:
+        if focused != self._focused:
+            self._focused = focused
+            self.focusChanged.emit(focused)

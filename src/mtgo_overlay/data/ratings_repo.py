@@ -74,8 +74,35 @@ class RatingsRepository:
             return False
         return (self._time() - fetched_at) < self.ttl_seconds
 
+    def _csv_cache_current(self, expansion: str, fmt: str, csv_path: Path) -> bool:
+        """True only if the cache was built from *this* CSV at/after its mtime.
+
+        A changed ``csv_path`` or a touched file makes the cache stale regardless
+        of TTL, so pointing at a new export takes effect on the next draft instead
+        of being shadowed by a <24h-old cache.
+        """
+        data = self._read_cache(expansion, fmt)
+        if not data or data.get("source") != "csv":
+            return False
+        if data.get("source_path") != str(csv_path):
+            return False
+        cached_mtime = data.get("source_mtime")
+        if not isinstance(cached_mtime, (int, float)):
+            return False
+        try:
+            return Path(csv_path).stat().st_mtime <= cached_mtime
+        except OSError:
+            return False
+
     def _write_cache(
-        self, expansion: str, fmt: str, ratings: dict[str, float | None], source: str
+        self,
+        expansion: str,
+        fmt: str,
+        ratings: dict[str, float | None],
+        source: str,
+        *,
+        source_path: str | None = None,
+        source_mtime: float | None = None,
     ) -> Path:
         path = self._cache_path(expansion, fmt)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -86,6 +113,10 @@ class RatingsRepository:
             "fetched_at": self._time(),
             "ratings": ratings,
         }
+        if source_path is not None:
+            payload["source_path"] = source_path
+        if source_mtime is not None:
+            payload["source_mtime"] = source_mtime
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(json.dumps(payload), encoding="utf-8")
         os.replace(tmp, path)
@@ -107,7 +138,24 @@ class RatingsRepository:
         (live, CSV, or stale cache) can produce anything.
         """
         path = self._cache_path(expansion, fmt)
-        if self.is_fresh(expansion, fmt):
+        # A configured CSV is the source of truth: rebuild whenever its path or
+        # mtime differs from the cache, so the TTL never shadows a new export.
+        prefer_csv = (
+            not use_live and csv_path is not None and Path(csv_path).exists()
+        )
+        if prefer_csv:
+            if self._csv_cache_current(expansion, fmt, csv_path):
+                _log.info(
+                    "Ratings cache current for %s/%s (CSV %s unchanged).",
+                    expansion, fmt, csv_path,
+                )
+                return path
+            if path.exists():
+                _log.info(
+                    "Ratings CSV for %s/%s changed (%s); re-importing.",
+                    expansion, fmt, csv_path,
+                )
+        elif self.is_fresh(expansion, fmt):
             _log.info("Ratings cache fresh for %s/%s", expansion, fmt)
             return path
 
@@ -122,9 +170,17 @@ class RatingsRepository:
                 _log.warning("17lands fetch failed (%s); falling back.", exc)
 
         if csv_path is not None and Path(csv_path).exists():
-            ratings = parse_17lands_csv(Path(csv_path))
+            p = Path(csv_path)
+            ratings = parse_17lands_csv(p)
+            try:
+                mtime = p.stat().st_mtime
+            except OSError:
+                mtime = None
             _log.info("Imported %d ratings from CSV %s", len(ratings), csv_path)
-            return self._write_cache(expansion, fmt, ratings, source="csv")
+            return self._write_cache(
+                expansion, fmt, ratings, source="csv",
+                source_path=str(p), source_mtime=mtime,
+            )
 
         if path.exists():
             _log.warning("Using stale ratings cache for %s/%s", expansion, fmt)
@@ -146,6 +202,13 @@ class RatingsRepository:
                 continue
             out.append(CardRating(name=name, gih_wr=ratings.get(name)))
         return out
+
+    def distribution(self, expansion: str, fmt: str) -> list[float]:
+        """Sorted GIH WRs of every rated card in the set — the basis for coloring a
+        pill by its *percentile within this set*, not by absolute thresholds."""
+        data = self._read_cache(expansion, fmt) or {}
+        ratings: dict[str, float | None] = data.get("ratings", {})
+        return sorted(v for v in ratings.values() if isinstance(v, (int, float)))
 
 
 def parse_17lands_csv(path: Path) -> dict[str, float | None]:

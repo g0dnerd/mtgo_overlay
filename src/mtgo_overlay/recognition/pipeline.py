@@ -8,14 +8,18 @@ warmed cache can be swapped in cheaply.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Callable, Sequence
 
 import numpy as np
 
+from ..system.logging_setup import get_logger
 from . import identify, reference, region
 from .config import RecognitionConfig
 from .types import BBox, CardLocation, Slot
+
+_log = get_logger("recognition")
 
 DetectFn = Callable[[np.ndarray, RecognitionConfig, int], list[Slot]]
 TemplateProvider = Callable[[str], Sequence[np.ndarray]]
@@ -56,10 +60,40 @@ def locate_cards(
 
     scores = identify.build_score_matrix(slot_images, names, templates_provider)
     pairs = identify.assign(scores, min_affinity=cfg.min_affinity)
+    if _log.isEnabledFor(logging.DEBUG):
+        _log_confidence(slots, names, scores, pairs)
     return [
         CardLocation(name=names[j], bbox=slots[i].bbox, score=score)
         for i, j, score in pairs
     ]
+
+
+def _log_confidence(
+    slots: list[Slot],
+    names: list[str],
+    scores: np.ndarray,
+    pairs: list[tuple[int, int, float]],
+) -> None:
+    """Per-slot assignment confidence: the assigned name+score vs the best
+    unconstrained match (so a slot the assignment had to compromise on stands
+    out). Only built when DEBUG logging is on."""
+    assigned = {i: (names[j], s) for i, j, s in pairs}
+    for i, slot in enumerate(slots):
+        if scores.shape[1]:
+            top_j = int(np.argmax(scores[i]))
+            best = f"{names[top_j]}={scores[i][top_j]:.3f}"
+        else:
+            best = "n/a"
+        if i in assigned:
+            name, score = assigned[i]
+            _log.debug(
+                "  slot r%dc%d -> %-28s score=%.3f (best match %s)",
+                slot.row, slot.col, name, score, best,
+            )
+        else:
+            _log.debug(
+                "  slot r%dc%d UNASSIGNED (best match %s)", slot.row, slot.col, best
+            )
 
 
 def get_pos_and_names(

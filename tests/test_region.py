@@ -56,6 +56,43 @@ def test_fill_row_gaps_single_box_noop():
     assert region.fill_row_gaps(row, 100, 140) == [(row[0], False)]
 
 
+# --- lattice reconstruction (uses the known count to recover row-end cards) --
+
+def test_reconstruct_grid_extends_short_last_row():
+    # The live [8,2] failure: top row fully detected (8), bottom row only the two
+    # middle cards detected (cols 3,4). Knowing it's 14, the lattice must fill the
+    # bottom to 6 INCLUDING the row-end cells fill_row_gaps could never reach.
+    w, h = 90, 130
+    top = [BBox(c * 100, 0, w, h) for c in range(8)]
+    bottom = [BBox(3 * 100, 300, w, h), BBox(4 * 100, 300, w, h)]
+    slots = region.reconstruct_grid([top, bottom], w, h, expected_count=14)
+
+    assert slots is not None and len(slots) == 14
+    row1 = [s for s in slots if s.row == 1]
+    assert len(row1) == 6
+    assert sorted(s.col for s in row1 if s.synthetic) == [0, 1, 2, 5]
+    assert sorted(s.col for s in row1 if not s.synthetic) == [3, 4]
+
+
+def test_reconstruct_grid_complete_grid_has_no_synthesis():
+    w, h = 90, 130
+    top = [BBox(c * 100, 0, w, h) for c in range(8)]
+    bottom = [BBox(c * 100, 300, w, h) for c in range(6)]
+    slots = region.reconstruct_grid([top, bottom], w, h, expected_count=14)
+    assert slots is not None and len(slots) == 14
+    assert not any(s.synthetic for s in slots)
+
+
+def test_reconstruct_grid_bails_on_inconsistent_count():
+    # A mid-resize frame: the wide row's right half is genuinely off-screen, so
+    # 14 can't tile the detected geometry -> None (caller falls back; we do NOT
+    # hallucinate the missing cards).
+    w, h = 90, 130
+    top = [BBox(c * 100, 0, w, h) for c in range(4)]
+    bottom = [BBox(c * 100, 300, w, h) for c in range(6)]
+    assert region.reconstruct_grid([top, bottom], w, h, expected_count=14) is None
+
+
 # --- pixel stage on a synthetic grid (controlled, deterministic) -----------
 
 def test_detect_slots_on_synthetic_grid(make_grid, distinct_tiles):

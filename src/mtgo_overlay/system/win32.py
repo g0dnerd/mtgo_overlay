@@ -121,6 +121,13 @@ def get_client_rect_on_screen(hwnd: int) -> tuple[int, int, int, int]:
     return (origin.x, origin.y, rect.right - rect.left, rect.bottom - rect.top)
 
 
+def get_foreground_hwnd() -> int | None:
+    """HWND of the window the user is currently focused on, or ``None``."""
+    u = _user32()
+    hwnd = u.GetForegroundWindow()
+    return int(hwnd) if hwnd else None
+
+
 def find_mtgo_hwnd() -> int | None:
     """Find the MTGO (or 'Draft League') top-level window HWND, or ``None``."""
     u = _user32()

@@ -35,7 +35,10 @@ class RecognitionConfig:
     template_w: int = 100              # canonical template/slot width (px)
     template_h: int = 140              # canonical template/slot height (px) ~0.714
     prep_mode: str = "gray"            # "gray" or "gradient"
-    min_affinity: float = -1.0         # soft floor on match score (-1 disables)
+    # Soft floor on match score: real cards score ~0.6-0.85, so this only drops a
+    # synthesized cell that landed on background (a mislabel) without touching a
+    # real match. -1 disables.
+    min_affinity: float = 0.35
 
     @property
     def template_size(self) -> tuple[int, int]:

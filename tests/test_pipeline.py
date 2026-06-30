@@ -14,7 +14,10 @@ from conftest import discover_screenshot_fixtures
 
 
 def test_locate_cards_wiring(make_grid, distinct_tiles):
-    cfg = RecognitionConfig()
+    # Disable the match floor: synthetic noise tiles (with a border the bare
+    # template lacks) don't score like real card art, and this exercises wiring,
+    # not the floor (see test_identify.test_min_affinity_drops_low_scores).
+    cfg = RecognitionConfig(min_affinity=-1.0)
     img, boxes, tile_ids = make_grid(distinct_tiles, rows=3, cols=5)
     names = [f"tile_{i}" for i in range(len(boxes))]
 

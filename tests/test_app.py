@@ -5,16 +5,10 @@ from __future__ import annotations
 from mtgo_overlay.app import (
     build_label_specs,
     expansion_from_log_path,
-    format_label,
     map_capture_to_logical,
 )
 from mtgo_overlay.data.ratings_repo import CardRating
 from mtgo_overlay.recognition.types import BBox, CardLocation
-
-
-def test_format_label():
-    assert format_label(75.7) == "GIH 75.7"
-    assert format_label(None) == "GIH N/A"
 
 
 def test_map_capture_to_logical():
@@ -36,9 +30,28 @@ def test_build_label_specs_joins_and_filters():
     specs = build_label_specs(located, ratings, dpr=1.0)
 
     assert len(specs) == 2
-    by_text = {s.text: (s.x, s.y, s.w, s.h) for s in specs}
-    assert by_text["GIH 70.3"] == (100, 100, 120, 168)
-    assert by_text["GIH N/A"] == (500, 100, 120, 168)
+    by_wr = {s.gih_wr: (s.x, s.y, s.w, s.h) for s in specs}
+    assert by_wr[70.3] == (100, 100, 120, 168)
+    assert by_wr[None] == (500, 100, 120, 168)
+
+
+def test_build_label_specs_colors_by_set_percentile():
+    located = [
+        CardLocation("Worst", BBox(0, 0, 100, 100), 0.9),
+        CardLocation("Best", BBox(100, 0, 100, 100), 0.9),
+        CardLocation("Unrated", BBox(200, 0, 100, 100), 0.9),
+    ]
+    ratings = [
+        CardRating("Worst", 48.0),
+        CardRating("Best", 64.0),
+        CardRating("Unrated", None),
+    ]
+    distribution = sorted([48.0, 50.0, 52.0, 54.0, 56.0, 58.0, 60.0, 62.0, 64.0, 66.0])
+    specs = build_label_specs(located, ratings, dpr=1.0, distribution=distribution)
+    by_wr = {s.gih_wr: s.tier for s in specs}
+    assert by_wr[48.0] < 0.15            # bottom of the set -> near 0 (red)
+    assert by_wr[64.0] > 0.80            # top of the set -> near 1 (green)
+    assert by_wr[None] is None           # unrated -> no tier (neutral pill)
 
 
 def test_build_label_specs_scales_with_dpr():

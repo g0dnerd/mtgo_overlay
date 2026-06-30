@@ -19,20 +19,23 @@ from ..system import paths
 
 @dataclass
 class OverlayStyle:
-    """Look of the GIH labels. Offsets are *fractions of the card box*, not pixels,
-    so they survive arbitrary MTGO sizes / DPI."""
+    """Look of the GIH win-rate pills. Every size/offset is a *fraction of the card
+    box*, not pixels, so the label scales with arbitrary MTGO sizes / DPI."""
 
     font_family: str = "Segoe UI"
-    font_size_pt: int = 11
     fg: str = "#ffffff"
-    bg: str = "#707070"
-    # Inset of the label from the card's right edge, as a fraction of card width.
-    inset_x_frac: float = 0.04
-    # Vertical position of the label top, as a fraction of card height.
-    top_y_frac: float = 0.05
-    # Background opacity 0..1 (Qt per-pixel alpha; not Win32 LWA_ALPHA).
-    bg_opacity: float = 0.85
-    padding_px: int = 4
+    # Gray pill for cards with no rating (low sample / unknown).
+    unknown_color: str = "#6b7280"
+    # Number height as a fraction of card height.
+    font_h_frac: float = 0.072
+    # Pill's bottom edge as a fraction of card height — kept at the bottom of the
+    # art, clear of the title bar above and the type line / rules text below.
+    pill_bottom_frac: float = 0.50
+    # Inset of the pill's right edge from the card's right edge (fraction of width).
+    inset_x_frac: float = 0.045
+    # Horizontal / vertical text padding as fractions of card width / height.
+    pad_x_frac: float = 0.035
+    pad_y_frac: float = 0.012
 
 
 @dataclass

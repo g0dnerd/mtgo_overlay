@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from mtgo_overlay.recognition.config import RecognitionConfig  # noqa: E402
 from mtgo_overlay.recognition.pipeline import locate_cards  # noqa: E402
 from mtgo_overlay.recognition.region import detect_slots  # noqa: E402
+from mtgo_overlay.system import logging_setup  # noqa: E402
 
 GREEN = (0, 255, 0)
 YELLOW = (0, 255, 255)
@@ -41,6 +42,8 @@ def main() -> int:
     ap.add_argument("--expected", type=int, default=0, help="expected card count")
     ap.add_argument("--boxes-only", action="store_true")
     args = ap.parse_args()
+
+    logging_setup.setup(to_file=False)  # honors MTGO_OVERLAY_DEBUG for stage logs
 
     screen = cv2.imread(str(args.screenshot))
     if screen is None:

@@ -150,3 +150,32 @@ def test_watcher_emits_signals(tmp_path, qapp):
 
     watcher.handle_modified(str(draft_file))
     assert modified == [str(draft_file)]
+
+
+def test_watcher_adopts_existing_log_on_start(tmp_path, qapp):
+    from mtgo_overlay.draft.log_watcher import DraftLogWatcher
+
+    # A draft already in progress when the overlay launches: MTGO wrote a new
+    # file per draft, so no on_created fires for it -> the startup scan adopts it.
+    draft_file = tmp_path / "TestUser-draft-msh.txt"
+    draft_file.write_text("x", encoding="utf-8")
+
+    watcher = DraftLogWatcher(tmp_path, "TestUser")
+    started: list[str] = []
+    watcher.draftStarted.connect(started.append)
+
+    watcher._adopt_existing_log()
+    assert started == [str(draft_file)]
+    assert watcher.active_log == str(draft_file)
+
+
+def test_watcher_adopt_noop_when_no_existing_log(tmp_path, qapp):
+    from mtgo_overlay.draft.log_watcher import DraftLogWatcher
+
+    watcher = DraftLogWatcher(tmp_path, "TestUser")
+    started: list[str] = []
+    watcher.draftStarted.connect(started.append)
+
+    watcher._adopt_existing_log()  # empty folder -> no candidates
+    assert started == []
+    assert watcher.active_log is None

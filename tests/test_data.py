@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
@@ -179,3 +180,42 @@ def test_repo_raises_when_no_source(tmp_path):
     repo = _repo(tmp_path)
     with pytest.raises(RatingsError):
         repo.ensure("mh3", "PremierDraft", use_live=False, csv_path=None)
+
+
+def test_repo_reimports_when_csv_path_changes(tmp_path, fixtures_dir):
+    """Pointing at a different CSV overrides a still-fresh (TTL) cache."""
+    clock = {"t": 1000.0}
+    repo = _repo(tmp_path, time_fn=lambda: clock["t"])
+    csv_a = fixtures_dir / "ratings" / "sample_card_ratings.csv"
+    repo.ensure("mh3", "PremierDraft", use_live=False, csv_path=csv_a)
+    assert repo.is_fresh("mh3", "PremierDraft")  # cache still inside TTL
+
+    csv_b = tmp_path / "other.csv"
+    csv_b.write_text("Name,GIH WR\nAgent Phil Coulson,99.9%\n", encoding="utf-8")
+    repo.ensure("mh3", "PremierDraft", use_live=False, csv_path=csv_b)
+
+    out = {r.name: r.gih_wr for r in repo.lookup("mh3", "PremierDraft", ["Agent Phil Coulson"])}
+    assert out["Agent Phil Coulson"] == 99.9
+
+
+def test_repo_reimports_when_csv_modified(tmp_path):
+    """Touching the same CSV (newer mtime) overrides the cache within the TTL."""
+    repo = _repo(tmp_path)
+    csv = tmp_path / "r.csv"
+    csv.write_text("Name,GIH WR\nAgent Phil Coulson,10%\n", encoding="utf-8")
+    repo.ensure("mh3", "PremierDraft", use_live=False, csv_path=csv)
+    assert repo.lookup("mh3", "PremierDraft", ["Agent Phil Coulson"])[0].gih_wr == 10.0
+
+    csv.write_text("Name,GIH WR\nAgent Phil Coulson,20%\n", encoding="utf-8")
+    st = csv.stat()
+    os.utime(csv, (st.st_atime, st.st_mtime + 1000))  # ensure strictly-newer mtime
+    repo.ensure("mh3", "PremierDraft", use_live=False, csv_path=csv)
+    assert repo.lookup("mh3", "PremierDraft", ["Agent Phil Coulson"])[0].gih_wr == 20.0
+
+
+def test_repo_csv_cache_reused_when_unchanged(tmp_path, fixtures_dir):
+    """An unchanged CSV path+mtime is served from cache (no needless re-parse)."""
+    repo = _repo(tmp_path)
+    csv = fixtures_dir / "ratings" / "sample_card_ratings.csv"
+    repo.ensure("mh3", "PremierDraft", use_live=False, csv_path=csv)
+    assert repo._csv_cache_current("mh3", "PremierDraft", csv)

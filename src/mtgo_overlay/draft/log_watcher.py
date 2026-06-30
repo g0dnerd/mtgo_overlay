@@ -14,7 +14,7 @@ from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 from ..system.logging_setup import get_logger
-from .log_parser import is_valid_draft
+from .log_parser import get_current_log, is_valid_draft
 
 _log = get_logger("log_watcher")
 
@@ -52,6 +52,22 @@ class DraftLogWatcher(QObject):
         self._observer.schedule(_Handler(self), self.log_dir, recursive=False)
         self._observer.start()
         _log.info("Watching %s for %s*.txt", self.log_dir, self.username)
+        self._adopt_existing_log()
+
+    def _adopt_existing_log(self) -> None:
+        """Engage the newest pre-existing draft log, if any.
+
+        MTGO writes a new file per draft, so a draft already in progress when the
+        overlay launches fires no ``on_created`` and would otherwise be missed.
+        This mirrors :meth:`handle_created` for that file; the controller decides
+        whether it is still live."""
+        try:
+            path = get_current_log(self.log_dir, self.username)
+        except (ValueError, OSError):
+            return  # nothing matching in the folder
+        self.active_log = path
+        _log.info("Found existing draft log on startup: %s", path)
+        self.draftStarted.emit(path)
 
     def stop(self) -> None:
         if self._observer is not None:
