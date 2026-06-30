@@ -730,13 +730,31 @@ class AppController(QObject):
 
         menu = QMenu()
         menu.setToolTipsVisible(True)
+
+        # Connection setup — the two things the overlay needs to find drafts.
         for text, slot in (
-            ("Reboot", self._restart_watcher),
             ("Enter MTGO username", self._prompt_username),
             ("Change log folder", self._prompt_log_folder),
         ):
             action = QAction(text, menu)
             action.triggered.connect(slot)
+            menu.addAction(action)
+
+        menu.addSeparator()
+        # Ratings / win-rate sources, grouped together.
+        # Held on self so the action group (and its checked state) outlives this
+        # method; mutually-exclusive checkable picks for the win-rate cohort.
+        self._group_actions = QActionGroup(menu)
+        self._group_actions.setExclusive(True)
+        for label, group in (
+            ("Win rates: Top players", GROUP_TOP),
+            ("Win rates: All players", GROUP_ALL),
+        ):
+            action = QAction(label, menu)
+            action.setCheckable(True)
+            action.setChecked(self.settings.user_group == group)
+            action.triggered.connect(lambda _checked, g=group: self._set_user_group(g))
+            self._group_actions.addAction(action)
             menu.addAction(action)
 
         # With the live endpoint on, the CSV is only an automatic offline
@@ -753,22 +771,6 @@ class AppController(QObject):
         download_action = QAction("Download set…", menu)
         download_action.triggered.connect(self._prompt_download_set)
         menu.addAction(download_action)
-
-        menu.addSeparator()
-        # Held on self so the action group (and its checked state) outlives this
-        # method; mutually-exclusive checkable picks for the win-rate cohort.
-        self._group_actions = QActionGroup(menu)
-        self._group_actions.setExclusive(True)
-        for label, group in (
-            ("Win rates: Top players", GROUP_TOP),
-            ("Win rates: All players", GROUP_ALL),
-        ):
-            action = QAction(label, menu)
-            action.setCheckable(True)
-            action.setChecked(self.settings.user_group == group)
-            action.triggered.connect(lambda _checked, g=group: self._set_user_group(g))
-            self._group_actions.addAction(action)
-            menu.addAction(action)
 
         menu.addSeparator()
         clear_action = QAction("Clear local data…", menu)
