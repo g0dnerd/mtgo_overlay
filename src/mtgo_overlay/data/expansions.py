@@ -95,13 +95,41 @@ class SupportedSets:
         return {}
 
 
-def codes_newest_first(filters: dict) -> list[str]:
+# Arena-only sets whose 17lands format coverage otherwise mimics a real MTGO set.
+_ARENA_ONLY_CODES = frozenset({"HBG", "KLR", "SIR"})
+
+# A set MTGO actually runs offers both of these on 17lands; Alchemy rebalances and
+# the cube/chaos event pseudo-sets never list both.
+_MTGO_REQUIRED_FORMATS = frozenset({"PremierDraft", "TradDraft"})
+
+
+def is_mtgo_draftable(code: str, formats: list[str]) -> bool:
+    """Whether a 17lands expansion is also a real MTGO-draftable set.
+
+    17lands lists Arena's whole set universe; this keeps only what MTGO gets.
+    Dropped: Alchemy rebalances (``Y\\d\\d`` codes, no TradDraft), the Arena
+    cube/chaos/remix event pseudo-sets (mixed-case or spaced names), and the
+    handful of Arena-only remasters that otherwise look like real set codes.
+    """
+    if not (code.isalnum() and code.isupper()):
+        return False
+    if code in _ARENA_ONLY_CODES:
+        return False
+    return _MTGO_REQUIRED_FORMATS <= set(formats)
+
+
+def codes_newest_first(filters: dict, *, mtgo_only: bool = False) -> list[str]:
     """Expansion codes ordered newest-first by 17lands start date.
 
     Codes with no start date sort last; the blank pseudo-expansion is dropped.
+    With ``mtgo_only`` the list is narrowed to MTGO-draftable sets
+    (see :func:`is_mtgo_draftable`).
     """
     expansions = [c for c in filters.get("expansions", []) if c]
     start_dates = filters.get("start_dates", {})
+    if mtgo_only:
+        fbe = filters.get("formats_by_expansion", {})
+        expansions = [c for c in expansions if is_mtgo_draftable(c, fbe.get(c, []))]
     return sorted(expansions, key=lambda c: start_dates.get(c, ""), reverse=True)
 
 

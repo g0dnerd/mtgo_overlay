@@ -651,14 +651,14 @@ class AppController(QObject):
     def _on_supported_sets(self, filters: dict) -> None:
         self._filters = filters or {}
         _log.info(
-            "Supported-set list ready (%d set(s)).",
-            len(expansions.codes_newest_first(self._filters)),
+            "Supported-set list ready (%d MTGO set(s)).",
+            len(expansions.codes_newest_first(self._filters, mtgo_only=True)),
         )
 
     def _prompt_download_set(self) -> None:
         from PySide6.QtWidgets import QInputDialog
 
-        codes = expansions.codes_newest_first(self._filters)
+        codes = expansions.codes_newest_first(self._filters, mtgo_only=True)
         code, ok = QInputDialog.getItem(
             None,
             "Pre-download a set",

@@ -6,6 +6,7 @@ from mtgo_overlay.data.expansions import (
     SupportedSets,
     codes_newest_first,
     format_for,
+    is_mtgo_draftable,
 )
 from mtgo_overlay.data.seventeenlands import SeventeenLandsError
 
@@ -50,6 +51,47 @@ def test_codes_newest_first_empty():
 
 def test_codes_newest_first_drops_blank_pseudo_expansion():
     assert codes_newest_first({"expansions": ["", "X"], "start_dates": {}}) == ["X"]
+
+
+def test_is_mtgo_draftable_keeps_real_set():
+    assert is_mtgo_draftable("MSH", ["PremierDraft", "TradDraft", "Sealed"])
+
+
+def test_is_mtgo_draftable_drops_alchemy_no_traddraft():
+    assert not is_mtgo_draftable("Y26SOS", ["PremierDraft", "PickTwoDraft"])
+
+
+def test_is_mtgo_draftable_drops_event_pseudo_sets():
+    # Mixed-case / spaced names: the Arena cube/chaos/remix events.
+    assert not is_mtgo_draftable("Cube", ["PremierDraft", "TradDraft"])
+    assert not is_mtgo_draftable("Cube - Powered", ["PremierDraft", "TradDraft"])
+    assert not is_mtgo_draftable("Chaos", ["PremierDraft", "TradDraft"])
+
+
+def test_is_mtgo_draftable_drops_arena_only_remasters():
+    assert not is_mtgo_draftable("HBG", ["PremierDraft", "TradDraft", "QuickDraft"])
+    assert not is_mtgo_draftable("KLR", ["PremierDraft", "TradDraft"])
+
+
+def test_codes_newest_first_mtgo_only_filters_and_orders():
+    filters = {
+        "expansions": ["MSH", "Y26SOS", "Cube", "HBG", "OLD"],
+        "start_dates": {
+            "MSH": "2026-06-23T00:00:00Z",
+            "Y26SOS": "2026-05-19T00:00:00Z",
+            "Cube": "2026-05-31T00:00:00Z",
+            "HBG": "2022-07-07T00:00:00Z",
+            "OLD": "2020-01-01T00:00:00Z",
+        },
+        "formats_by_expansion": {
+            "MSH": ["PremierDraft", "TradDraft"],
+            "Y26SOS": ["PremierDraft"],
+            "Cube": ["PremierDraft", "TradDraft"],
+            "HBG": ["PremierDraft", "TradDraft"],
+            "OLD": ["PremierDraft", "TradDraft"],
+        },
+    }
+    assert codes_newest_first(filters, mtgo_only=True) == ["MSH", "OLD"]
 
 
 def test_format_for_prefers_supported_format():
