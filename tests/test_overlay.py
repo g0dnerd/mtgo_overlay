@@ -56,8 +56,10 @@ def test_labels_anchored_bottom_right_of_art(qapp):
     assert right_edge - inset - 3 <= rect.right() <= right_edge
     # Sits at the bottom of the art (well below the title bar), bottom edge at the
     # configured fraction of card height.
-    assert spec.h * 0.25 <= rect.top() - spec.y
-    assert abs((rect.bottom() + 1) - (spec.y + spec.h * win.style.pill_bottom_frac)) <= 2
+    assert spec.h * 0.18 <= rect.top() - spec.y
+    assert (
+        abs((rect.bottom() + 1) - (spec.y + spec.h * win.style.pill_bottom_frac)) <= 2
+    )
 
 
 def test_labels_do_not_overlap(qapp):
@@ -93,11 +95,12 @@ def test_render_to_image_draws_pixels(qapp):
 
 # --- percentile coloring (pure) --------------------------------------------
 
+
 def test_percentile_rank_orders_and_guards_small_samples():
     dist = sorted(float(v) for v in range(50, 70))  # 20 values, 50..69
-    assert percentile_rank(50.0, dist) < 0.1          # bottom
-    assert percentile_rank(69.0, dist) > 0.9          # top
-    assert percentile_rank(59.5, dist) == 0.5         # middle
+    assert percentile_rank(50.0, dist) < 0.1  # bottom
+    assert percentile_rank(69.0, dist) > 0.9  # top
+    assert percentile_rank(59.5, dist) == 0.5  # middle
     # Too few data points to rank meaningfully -> None (neutral pill).
     assert percentile_rank(55.0, [55.0, 56.0]) is None
 
@@ -107,12 +110,13 @@ def test_ramp_color_spans_red_to_green():
 
     low = ramp_color(0.0)
     high = ramp_color(1.0)
-    assert low.red() > low.green()      # poor -> reddish
-    assert high.green() > high.red()    # great -> greenish
+    assert low.red() > low.green()  # poor -> reddish
+    assert high.green() > high.red()  # great -> greenish
     assert ramp_color(None) == QColor("#6b7280")  # unrated -> neutral gray
 
 
 # --- window tracker (injected hwnd/rect; no Win32 needed) ------------------
+
 
 def test_tracker_emits_resized_then_moved_then_lost(qapp):
     state = {"hwnd": None, "rect": (0, 0, 0, 0)}

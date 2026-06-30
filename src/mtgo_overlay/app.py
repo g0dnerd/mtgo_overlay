@@ -51,6 +51,7 @@ PICKS_PER_DRAFT = 42
 
 # --- pure helpers (unit-tested) --------------------------------------------
 
+
 def map_capture_to_logical(
     bbox: tuple[int, int, int, int], dpr: float
 ) -> tuple[int, int, int, int]:
@@ -114,6 +115,7 @@ def expansion_from_log_path(path: str) -> str:
 
 # --- recognition worker -----------------------------------------------------
 
+
 class _WorkerSignals(QObject):
     labelsReady = Signal(object)
     failed = Signal(str)
@@ -143,10 +145,14 @@ class RecognitionWorker(QRunnable):
             missing = [n for n in self.names if n not in set(located_names)]
             _log.info(
                 "Located %d/%d card(s) for %s.",
-                len(located), len(self.names), self.expansion,
+                len(located),
+                len(self.names),
+                self.expansion,
             )
             if missing:
-                _log.info("Cards NOT located (%d): %s", len(missing), "; ".join(missing))
+                _log.info(
+                    "Cards NOT located (%d): %s", len(missing), "; ".join(missing)
+                )
             ratings = self.repo.lookup(self.expansion, self.fmt, self.names)
             self.signals.labelsReady.emit(
                 {
@@ -178,10 +184,15 @@ class _EnsureWorker(QRunnable):
     def run(self) -> None:
         _log.info(
             "Preparing %s draft data (%d card names): ratings + Scryfall artwork.",
-            self.expansion, len(self.names),
+            self.expansion,
+            len(self.names),
         )
         try:
-            csv_path = Path(self.settings.manual_csv_path) if self.settings.manual_csv_path else None
+            csv_path = (
+                Path(self.settings.manual_csv_path)
+                if self.settings.manual_csv_path
+                else None
+            )
             self.repo.ensure(
                 self.expansion,
                 self.fmt,
@@ -201,7 +212,9 @@ class _EnsureWorker(QRunnable):
             )
         except Exception as exc:  # noqa: BLE001
             _log.warning("Artwork warm failed: %s", exc)
-        _log.info("Draft data ready for %s — recognition can now run offline.", self.expansion)
+        _log.info(
+            "Draft data ready for %s — recognition can now run offline.", self.expansion
+        )
         self.signals.labelsReady.emit(None)
 
 
@@ -225,10 +238,13 @@ class _PrefetchWorker(QRunnable):
         try:
             names = scryfall_art.enumerate_set_cards(self.expansion)
             if not names:
-                raise RuntimeError(f"Scryfall returned no cards for set '{self.expansion}'")
+                raise RuntimeError(
+                    f"Scryfall returned no cards for set '{self.expansion}'"
+                )
             _log.info(
                 "Downloading artwork for %d %s card name(s) from Scryfall...",
-                len(names), self.expansion,
+                len(names),
+                self.expansion,
             )
             scryfall_art.ensure_set_artwork(
                 self.expansion, names, paths.scryfall_cache_dir()
@@ -245,7 +261,9 @@ class _PrefetchWorker(QRunnable):
             self.repo.ensure(self.expansion, self.fmt, use_live=True, csv_path=None)
         except Exception as exc:  # noqa: BLE001 - ratings is best-effort here
             ratings_ok = False
-            _log.warning("Ratings warm failed for %s/%s: %s", self.expansion, self.fmt, exc)
+            _log.warning(
+                "Ratings warm failed for %s/%s: %s", self.expansion, self.fmt, exc
+            )
         self.signals.labelsReady.emit(
             {
                 "expansion": self.expansion,
@@ -277,8 +295,11 @@ class _SupportedSetsWorker(QRunnable):
 
 # --- controller -------------------------------------------------------------
 
+
 class AppController(QObject):
-    def __init__(self, app: QApplication, settings: Settings | None = None, parent=None):
+    def __init__(
+        self, app: QApplication, settings: Settings | None = None, parent=None
+    ):
         super().__init__(parent)
         self.app = app
         self.settings = settings or Settings.load()
@@ -327,7 +348,8 @@ class AppController(QObject):
     def _log_environment(self) -> None:
         cfg_path = paths.config_file()
         _log.info(
-            "Config: %s (%s).", cfg_path,
+            "Config: %s (%s).",
+            cfg_path,
             "loaded" if cfg_path.exists() else "not found — using defaults",
         )
         _log.info(
@@ -337,7 +359,8 @@ class AppController(QObject):
         if self.settings.log_dir:
             _log.info(
                 "Log folder: %s (exists=%s).",
-                self.settings.log_dir, Path(self.settings.log_dir).is_dir(),
+                self.settings.log_dir,
+                Path(self.settings.log_dir).is_dir(),
             )
         else:
             _log.info("Log folder: NOT SET — set it from the tray menu.")
@@ -354,11 +377,13 @@ class AppController(QObject):
             _log.warning(
                 "Ratings source: none configured — every label will read 'GIH N/A'. "
                 "Set manual_csv_path in %s to a 17lands card_ratings.csv export, or "
-                "set use_live_17lands=true.", cfg_path,
+                "set use_live_17lands=true.",
+                cfg_path,
             )
         _log.info(
             "Caches: ratings=%s | scryfall=%s",
-            paths.ratings_cache_dir(), paths.scryfall_cache_dir(),
+            paths.ratings_cache_dir(),
+            paths.scryfall_cache_dir(),
         )
 
     def shutdown(self) -> None:
@@ -381,7 +406,9 @@ class AppController(QObject):
         if not (self.settings.mtgo_username and self.settings.log_dir):
             _log.info("Username / log folder not set; configure via the tray menu.")
             return
-        self.watcher = DraftLogWatcher(self.settings.log_dir, self.settings.mtgo_username)
+        self.watcher = DraftLogWatcher(
+            self.settings.log_dir, self.settings.mtgo_username
+        )
         self.watcher.draftStarted.connect(self._on_draft_started)
         self.watcher.logModified.connect(self._on_log_modified)
         self.watcher.start()
@@ -394,14 +421,18 @@ class AppController(QObject):
         if len(self.log.picks) >= PICKS_PER_DRAFT:
             _log.info(
                 "Log %s is a completed draft (%d picks); waiting for a new one.",
-                path, len(self.log.picks),
+                path,
+                len(self.log.picks),
             )
             self.log = None
             if self.watcher is not None:
                 self.watcher.set_active_log(None)
             return
-        _log.info("Draft started: expansion=%s, %d picks so far",
-                  self.expansion, len(self.log.picks))
+        _log.info(
+            "Draft started: expansion=%s, %d picks so far",
+            self.expansion,
+            len(self.log.picks),
+        )
         self._draft_prepared = False
         # MTGO (and the replay tool) usually create the log file before the first
         # pack is written, so current_pack is empty here. Defer warming to the
@@ -414,8 +445,12 @@ class AppController(QObject):
         per draft, as soon as a non-empty pack is known."""
         self._draft_prepared = True
         worker = _EnsureWorker(
-            self.repo, self.expansion, self.settings.fmt,
-            self.log.current_pack, self.settings, self._schedule_recognition,
+            self.repo,
+            self.expansion,
+            self.settings.fmt,
+            self.log.current_pack,
+            self.settings,
+            self._schedule_recognition,
         )
         self.pool.start(worker)
 
@@ -458,12 +493,19 @@ class AppController(QObject):
         self._generation += 1
         _log.info(
             "Recognizing pack of %d card(s) (gen %d) for %s/%s.",
-            len(self.log.current_pack), self._generation,
-            self.expansion, self.settings.fmt,
+            len(self.log.current_pack),
+            self._generation,
+            self.expansion,
+            self.settings.fmt,
         )
         worker = RecognitionWorker(
-            self._generation, hwnd, list(self.log.current_pack),
-            self.expansion, self.settings.fmt, self.repo, self.cfg,
+            self._generation,
+            hwnd,
+            list(self.log.current_pack),
+            self.expansion,
+            self.settings.fmt,
+            self.repo,
+            self.cfg,
         )
         worker.signals.labelsReady.connect(self._on_labels)
         self.pool.start(worker)
@@ -472,7 +514,8 @@ class AppController(QObject):
         if payload["generation"] != self._generation:
             _log.info(
                 "Dropping stale recognition result (gen %d; current %d).",
-                payload["generation"], self._generation,
+                payload["generation"],
+                self._generation,
             )
             return  # superseded by a newer pack
         dpr = self._device_pixel_ratio()
@@ -484,7 +527,10 @@ class AppController(QObject):
         _log.info(
             "Recognition done: located %d card(s) -> %d label(s) shown "
             "(dpr=%.2f, set distribution n=%d).",
-            len(payload["located"]), len(specs), dpr, len(distribution),
+            len(payload["located"]),
+            len(specs),
+            dpr,
+            len(distribution),
         )
         self.overlay.set_labels(specs)
 
@@ -523,8 +569,11 @@ class AppController(QObject):
     def _on_focus_changed(self, focused: bool) -> None:
         # Keep the labels but hide the window when MTGO isn't the active window,
         # so the overlay never plasters win rates over other apps.
-        _log.info("MTGO %s focus — overlay %s.",
-                  "gained" if focused else "lost", "shown" if focused else "hidden")
+        _log.debug(
+            "MTGO %s focus — overlay %s.",
+            "gained" if focused else "lost",
+            "shown" if focused else "hidden",
+        )
         self.overlay.setVisible(focused)
 
     # --- tray ----------------------------------------------------------------
@@ -575,7 +624,12 @@ class AppController(QObject):
 
         codes = expansions.codes_newest_first(self._filters)
         code, ok = QInputDialog.getItem(
-            None, "Pre-download a set", "Set:", codes, 0, True,
+            None,
+            "Pre-download a set",
+            "Set:",
+            codes,
+            0,
+            True,
         )
         if not ok:
             return
@@ -585,18 +639,24 @@ class AppController(QObject):
 
     def _prefetch_set(self, expansion: str) -> None:
         fmt = expansions.format_for(expansion, self.settings.fmt, self._filters)
-        _log.info("Manual download requested for %s (art + %s ratings).", expansion, fmt)
+        _log.info(
+            "Manual download requested for %s (art + %s ratings).", expansion, fmt
+        )
         if self._tray is not None:
             self._tray.showMessage(
                 "MTGO 17lands Overlay",
                 f"Downloading {expansion} card art + ratings — first run can take a "
                 f"minute or two; watch the terminal/log for progress.",
             )
-        self.pool.start(_PrefetchWorker(expansion, fmt, self.repo, self._on_prefetch_done))
+        self.pool.start(
+            _PrefetchWorker(expansion, fmt, self.repo, self._on_prefetch_done)
+        )
 
     def _on_prefetch_done(self, result: dict) -> None:
         if result.get("ok"):
-            ratings = "ratings cached" if result.get("ratings_ok") else "ratings unavailable"
+            ratings = (
+                "ratings cached" if result.get("ratings_ok") else "ratings unavailable"
+            )
             msg = (
                 f"{result['expansion']} ready — {result['count']} card(s) art cached, "
                 f"{ratings}."
@@ -611,7 +671,9 @@ class AppController(QObject):
         from PySide6.QtWidgets import QFileDialog
 
         path, _ = QFileDialog.getOpenFileName(
-            None, "Select 17lands card_ratings CSV", "",
+            None,
+            "Select 17lands card_ratings CSV",
+            "",
             "CSV files (*.csv);;All files (*)",
         )
         if path:
@@ -627,15 +689,21 @@ class AppController(QObject):
             return
         _log.info("Re-importing ratings for the active %s pack.", self.expansion)
         worker = _EnsureWorker(
-            self.repo, self.expansion, self.settings.fmt,
-            self.log.current_pack, self.settings, self._schedule_recognition,
+            self.repo,
+            self.expansion,
+            self.settings.fmt,
+            self.log.current_pack,
+            self.settings,
+            self._schedule_recognition,
         )
         self.pool.start(worker)
 
     def _prompt_username(self) -> None:
         from PySide6.QtWidgets import QInputDialog
 
-        name, ok = QInputDialog.getText(None, "MTGO Username", "Enter your MTGO username:")
+        name, ok = QInputDialog.getText(
+            None, "MTGO Username", "Enter your MTGO username:"
+        )
         if ok and name:
             self.settings.mtgo_username = name
             self.settings.save()
@@ -657,13 +725,16 @@ class AppController(QObject):
 
 # --- entrypoint -------------------------------------------------------------
 
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     logging_setup.setup()
     _log.info("=== MTGO 17lands Overlay starting ===")
     _log.info(
         "Python %s | platform=%s | pid=%d | frozen=%s",
-        sys.version.split()[0], sys.platform, os.getpid(),
+        sys.version.split()[0],
+        sys.platform,
+        os.getpid(),
         getattr(sys, "frozen", False),
     )
     _log.info("Log file: %s", paths.logs_dir() / "mtgo_overlay.log")
