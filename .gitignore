@@ -5,7 +5,7 @@
 # trimmed copies under tests/fixtures/ are the tracked test data)
 /Screenshot*.png
 /draft_log.txt
-/card_ratings.csv
+/card_ratings*.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
