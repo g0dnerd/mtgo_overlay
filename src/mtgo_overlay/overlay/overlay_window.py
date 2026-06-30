@@ -126,11 +126,16 @@ def paint_label(
     painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, format_wr(spec.gih_wr))
 
 
+# 17Lands asks that tools building on their data keep a visible, top-level credit.
+CITATION = "Win rates: 17Lands"
+
+
 class OverlayWindow(QWidget):
     def __init__(self, style: OverlayStyle | None = None, parent: QWidget | None = None):
         super().__init__(parent)
         self.style = style or OverlayStyle()
         self._labels: list[LabelSpec] = []
+        self._notice: str | None = None
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -152,6 +157,19 @@ class OverlayWindow(QWidget):
         self._labels = []
         self.update()
 
+    def set_notice(self, text: str | None) -> None:
+        """A caption shown in place of the citation — e.g. an embargo note when no
+        pills are drawn. ``None`` restores the default 17Lands citation."""
+        self._notice = text
+        self.update()
+
+    def caption_text(self) -> str | None:
+        """The bottom-left caption for the current state: the embargo notice if
+        set, else the standing 17Lands citation when pills are showing."""
+        if self._notice:
+            return self._notice
+        return CITATION if self._labels else None
+
     def label_rects(self) -> list[tuple[LabelSpec, QRect]]:
         """Computed pill rects for the current labels (no painting)."""
         return [(spec, self._compute_rect(spec).toRect()) for spec in self._labels]
@@ -171,7 +189,26 @@ class OverlayWindow(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         for spec in self._labels:
             paint_label(painter, self._compute_rect(spec), spec, self.style)
+        caption = self.caption_text()
+        if caption:
+            self._paint_caption(painter, caption)
         painter.end()
+
+    def _paint_caption(self, painter: QPainter, text: str) -> None:
+        font = QFont(self.style.font_family)
+        font.setPixelSize(max(11, round(self.height() * 0.018)))
+        painter.setFont(font)
+        fm = QFontMetrics(font)
+        pad = fm.height() * 0.4
+        margin = round(self.height() * 0.012) + 4
+        bw = fm.horizontalAdvance(text) + 2 * pad
+        bh = fm.height() + 2 * pad
+        rect = QRectF(margin, self.height() - margin - bh, bw, bh)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(0, 0, 0, 140))
+        painter.drawRoundedRect(rect, bh / 4, bh / 4)
+        painter.setPen(QColor(self.style.fg))
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
 
     # --- Win32 click-through (Windows only) ----------------------------------
 

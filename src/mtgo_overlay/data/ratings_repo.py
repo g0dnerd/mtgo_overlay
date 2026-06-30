@@ -1,11 +1,11 @@
 """Ratings repository: resolve GIH win rates for a pack with aggressive caching.
 
 Source priority is configurable. With ``use_live=False`` (the sanctioned default)
-the manual 17lands CSV is imported. With ``use_live=True`` the internal endpoint
+the manual 17Lands CSV is imported. With ``use_live=True`` the internal endpoint
 is tried first, then CSV, then a stale cache, before giving up. Either way the
 normalized result is cached as ``<EXP>_<FMT>_<group>.json`` carrying ``fetched_at``
 so a refresh happens at most once per set/format/group per 24h. The ``group`` axis
-("all" vs "top") keys the two 17lands player cohorts into separate caches so the
+("all" vs "top") keys the two 17Lands player cohorts into separate caches so the
 overlay's toggle flips between them without a network round-trip. Basic-land
 filtering lives in :meth:`lookup`, keeping the overlay dumb.
 """
@@ -28,7 +28,7 @@ _log = get_logger("ratings")
 
 TTL_SECONDS = 24 * 60 * 60
 
-# Stable cache labels for the two 17lands player cohorts. "all" omits the
+# Stable cache labels for the two 17Lands player cohorts. "all" omits the
 # endpoint's user_group param (its aggregate); "top" selects top players.
 GROUP_ALL = "all"
 GROUP_TOP = "top"
@@ -37,7 +37,7 @@ GROUP_TOP = "top"
 def _user_group_param(group: str) -> str | None:
     """The endpoint's ``user_group`` value for a cache group label.
 
-    "all" maps to ``None`` (omit the param — sending ``user_group=all`` returns
+    "all" maps to ``None`` (omit the param - sending ``user_group=all`` returns
     null win rates); any other label is sent verbatim.
     """
     return None if group == GROUP_ALL else group
@@ -165,29 +165,33 @@ class RatingsRepository:
         Returns the cache path. Raises :class:`RatingsError` only when no source
         (live, CSV, or stale cache) can produce anything. ``group`` is the player
         cohort ("all" or "top"); it keys a separate cache and selects the live
-        ``user_group`` filter. ``start_date`` (``YYYY-MM-DD``, the set's 17lands
+        ``user_group`` filter. ``start_date`` (``YYYY-MM-DD``, the set's 17Lands
         start) makes the live fetch span the set's whole lifetime instead of
-        17lands' rolling default window, which is empty for sets no longer in
+        17Lands' rolling default window, which is empty for sets no longer in
         rotation. A CSV has no cohort dimension, so it seeds whichever ``group``
         asked for it.
         """
         path = self._cache_path(expansion, fmt, group)
         # A configured CSV is the source of truth: rebuild whenever its path or
         # mtime differs from the cache, so the TTL never shadows a new export.
-        prefer_csv = (
-            not use_live and csv_path is not None and Path(csv_path).exists()
-        )
+        prefer_csv = not use_live and csv_path is not None and Path(csv_path).exists()
         if prefer_csv:
             if self._csv_cache_current(expansion, fmt, csv_path, group):
                 _log.info(
                     "Ratings cache current for %s/%s/%s (CSV %s unchanged).",
-                    expansion, fmt, group, csv_path,
+                    expansion,
+                    fmt,
+                    group,
+                    csv_path,
                 )
                 return path
             if path.exists():
                 _log.info(
                     "Ratings CSV for %s/%s/%s changed (%s); re-importing.",
-                    expansion, fmt, group, csv_path,
+                    expansion,
+                    fmt,
+                    group,
+                    csv_path,
                 )
         elif self.is_fresh(expansion, fmt, group):
             _log.info("Ratings cache fresh for %s/%s/%s", expansion, fmt, group)
@@ -197,25 +201,33 @@ class RatingsRepository:
             try:
                 end_date = self._today() if start_date else None
                 data = self.client.fetch_ratings(
-                    expansion, fmt, start_date=start_date, end_date=end_date,
+                    expansion,
+                    fmt,
+                    start_date=start_date,
+                    end_date=end_date,
                     user_group=_user_group_param(group),
                 )
                 ratings = SeventeenLandsClient.to_ratings_map(data)
                 if not any(v is not None for v in ratings.values()):
                     # A 200 with every WR null (e.g. an empty date window for a
-                    # rotated-out set) is a miss, not data — fall back rather than
+                    # rotated-out set) is a miss, not data - fall back rather than
                     # caching all-N/A and shadowing the CSV for 24h.
                     raise SeventeenLandsError(
                         f"no rated cards for {expansion}/{fmt}/{group} "
                         f"(window {start_date or 'default'}..{end_date or 'now'})"
                     )
-                _log.info("Fetched %d ratings from 17lands for %s/%s/%s",
-                          len(ratings), expansion, fmt, group)
+                _log.info(
+                    "Fetched %d ratings from 17Lands for %s/%s/%s",
+                    len(ratings),
+                    expansion,
+                    fmt,
+                    group,
+                )
                 return self._write_cache(
-                    expansion, fmt, ratings, source="17lands", group=group
+                    expansion, fmt, ratings, source="17Lands", group=group
                 )
             except SeventeenLandsError as exc:
-                _log.warning("17lands fetch failed (%s); falling back.", exc)
+                _log.warning("17Lands fetch failed (%s); falling back.", exc)
 
         if csv_path is not None and Path(csv_path).exists():
             p = Path(csv_path)
@@ -226,12 +238,19 @@ class RatingsRepository:
                 mtime = None
             _log.info("Imported %d ratings from CSV %s", len(ratings), csv_path)
             return self._write_cache(
-                expansion, fmt, ratings, source="csv", group=group,
-                source_path=str(p), source_mtime=mtime,
+                expansion,
+                fmt,
+                ratings,
+                source="csv",
+                group=group,
+                source_path=str(p),
+                source_mtime=mtime,
             )
 
         if path.exists():
-            _log.warning("Using stale ratings cache for %s/%s/%s", expansion, fmt, group)
+            _log.warning(
+                "Using stale ratings cache for %s/%s/%s", expansion, fmt, group
+            )
             return path
 
         raise RatingsError(
@@ -256,7 +275,7 @@ class RatingsRepository:
     def distribution(
         self, expansion: str, fmt: str, group: str = GROUP_ALL
     ) -> list[float]:
-        """Sorted GIH WRs of every rated card in the set — the basis for coloring a
+        """Sorted GIH WRs of every rated card in the set - the basis for coloring a
         pill by its *percentile within this set*, not by absolute thresholds."""
         data = self._read_cache(expansion, fmt, group) or {}
         ratings: dict[str, float | None] = data.get("ratings", {})
@@ -264,7 +283,7 @@ class RatingsRepository:
 
 
 def parse_17lands_csv(path: Path) -> dict[str, float | None]:
-    """Parse a 17lands card-ratings CSV export into ``{name: GIH WR percent}``.
+    """Parse a 17Lands card-ratings CSV export into ``{name: GIH WR percent}``.
 
     Tolerates the UTF-8 BOM the site emits, empty GIH WR cells (low-sample cards
     -> ``None``), and stray whitespace.

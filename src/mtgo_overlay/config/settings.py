@@ -42,18 +42,18 @@ class OverlayStyle:
 class Settings:
     mtgo_username: str = ""
     log_dir: str = ""
-    # 17lands draft format (see data.sets.Format).
+    # 17Lands draft format (see data.sets.Format).
     fmt: str = "PremierDraft"
-    # Default acquisition is the local CSV; flip on only after reviewing 17lands'
+    # Default acquisition is the local CSV; flip on only after reviewing 17Lands'
     # usage guidelines (the live endpoint is undocumented/internal).
     use_live_17lands: bool = False
     manual_csv_path: str = ""
-    # Which 17lands player cohort the pill shows: "top" (top players) or "all".
+    # Which 17Lands player cohort the pill shows: "top" (top players) or "all".
     # "top" sends user_group=top; "all" omits the param (the site's aggregate).
     user_group: str = "top"
     # Set once the first-run privacy/affiliation notice has been accepted.
     accepted_disclaimer: bool = False
-    # Polite identifying UA for the 17lands endpoint (tool + contact).
+    # Polite identifying UA for the 17Lands endpoint (tool + contact).
     user_agent: str = (
         "MtgoOverlay/0.2 (+https://github.com/g0dnerd/mtgo_overlay; personal use)"
     )

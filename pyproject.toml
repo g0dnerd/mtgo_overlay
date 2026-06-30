@@ -1,8 +1,10 @@
 [project]
 name = "mtgo-overlay"
 version = "0.2.0"
-description = "Click-through overlay drawing 17lands GIH win rates onto the MTGO draft pick view."
+description = "Click-through overlay drawing 17Lands GIH win rates onto the MTGO draft pick view."
 readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "PySide6>=6.7",

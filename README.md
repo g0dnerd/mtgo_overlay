@@ -1,9 +1,9 @@
-# MTGO 17lands Overlay
+# MTGO Draft Helper
 
-A click-through, always-on-top overlay that draws 17lands **Game-in-Hand Win
+A click-through, always-on-top overlay that draws 17Lands **Game-in-Hand Win
 Rate (GIH WR)** next to each card in the current Magic: The Gathering Online draft
-pack. Card *names* come from MTGO's draft log; card *positions* come from OpenCV
-template matching; *ratings* come from 17lands (manual CSV by default, with an
+pack. Card _names_ come from MTGO's draft log; card _positions_ come from OpenCV
+template matching; _ratings_ come from 17Lands (manual CSV by default, with an
 optional live fetch).
 
 > Recognition, data, log, overlay, and the Scryfall artwork integration are built
@@ -19,7 +19,7 @@ optional live fetch).
 src/mtgo_overlay/
   system/      resources, paths (%APPDATA%/%LOCALAPPDATA%), logging, win32 (DPI/click-through)
   config/      Settings + OverlayStyle dataclasses (TOML, atomic save)
-  data/        17lands client + ratings repo (24h TTL, CSV fallback) + set/format enums
+  data/        17Lands client + ratings repo (24h TTL, CSV fallback) + set/format enums
   draft/       log_parser (port) + log_watcher (watchdog -> Qt signals)
   capture/     MTGO client-area capture (mss + win32)
   recognition/ region (auto-Canny + lattice), identify (template + Hungarian),
@@ -31,41 +31,20 @@ tools/         fake_mtgo, replay_log, annotate_preview, propose_groundtruth
 tests/         headless tests + fixtures
 ```
 
-## Dev setup (`uv`)
-
-This repo lives on the WSL filesystem and is edited from WSL, but the app *runs*
-on Windows (MTGO is Windows-only). Use a **separate uv environment per OS** so the
-two don't clobber each other's `.venv`:
-
-```bash
-# WSL (tests, recognition dev, everything headless)
-uv sync --extra dev
-QT_QPA_PLATFORM=offscreen uv run pytest tests/ -q
-```
-
-```powershell
-# Windows (the actual app + the build)
-$env:UV_PROJECT_ENVIRONMENT = ".venv-win"
-uv sync --extra dev
-uv run python run.py
-```
-
-`uv.lock` is cross-platform (`pywin32` resolves only on Windows).
-
 ## Running
 
-On Windows: `uv run python run.py`. A tray icon appears — set your **MTGO
+On Windows: `uv run python run.py`. A tray icon appears - set your **MTGO
 username** and **log folder** from its menu. Start a draft; labels appear over the
 pack and update each pick. Config is saved to `%APPDATA%\MtgoOverlay\config.toml`;
 caches/logs live under `%LOCALAPPDATA%\MtgoOverlay\`.
 
-## Ratings data (17lands)
+## Ratings data (17Lands)
 
-Default is your locally-downloaded `card_ratings.csv` (17lands "download to CSV").
+Default is your locally-downloaded `card_ratings.csv` (17Lands "download to CSV").
 Point `manual_csv_path` at it (or use the tray once that's wired). An optional live
-fetch of 17lands' internal `card_ratings/data` endpoint exists behind
+fetch of 17Lands' internal `card_ratings/data` endpoint exists behind
 `use_live_17lands = true`; it is **off by default** because that endpoint is
-undocumented/internal — review 17lands' usage guidelines before enabling it.
+undocumented/internal - review 17Lands' usage guidelines before enabling it.
 `robots.txt` does not disallow the path; the repo caps usage at one request per
 set/format per 24h and sends a polite identifying User-Agent.
 
@@ -80,7 +59,7 @@ warms the cache per draft so recognition stays offline on the hot path. Cache:
 `%LOCALAPPDATA%\MtgoOverlay\cache\scryfall\` (`<EXP>_variants.json` + `<id>.png`).
 
 > Known gap: enumeration queries only the draft set. Booster-fun treatments printed
-> in *linked* sets aren't pulled yet — extend `_query_scryfall_prints` with the
+> in _linked_ sets aren't pulled yet - extend `_query_scryfall_prints` with the
 > set's companions if a treatment is missed.
 
 To add another real screenshot fixture (activates the recognition accuracy tests):
@@ -97,7 +76,7 @@ uv run python tools/annotate_preview.py tests/fixtures/mh3/pack1.png --expected 
 
 ## Testing tiers
 
-- **Tier 1 (headless, WSL/CI):** `pytest tests/` — recognition core, data, log
+- **Tier 1 (headless, WSL/CI):** `pytest tests/` - recognition core, data, log
   parser, overlay render (offscreen). No display, no MTGO, no network. Set
   `MTGO_OVERLAY_LIVE_SCRYFALL=1` to also run the live end-to-end identification
   test (hits Scryfall, rate-limited).
@@ -121,3 +100,26 @@ Run these on Windows after `($env:UV_PROJECT_ENVIRONMENT=".venv-win"; uv sync --
 ## Build
 
 `.\build.ps1` (PyInstaller one-file, no console, bundled `assets/`).
+
+## Credits & attribution
+
+- **Win rate data** comes from [**17Lands**](https://www.17lands.com/). This
+  project is an independent tool and is **not affiliated with, endorsed by, or
+  sponsored by** 17Lands. Please support 17Lands and review their usage
+  guidelines before enabling the live fetch.
+- **Card artwork** used for recognition comes from the
+  [**Scryfall**](https://scryfall.com/) API, per their
+  [API guidelines](https://scryfall.com/docs/api). Card images and Oracle text
+  are © Wizards of the Coast.
+- _Magic: The Gathering_ and _Magic Online_ are trademarks of **Wizards of the
+  Coast LLC**. Per the
+  [Fan Content Policy](https://company.wizards.com/en/legal/fancontentpolicy):
+
+  > MTGO Draft Helper is unofficial Fan Content permitted under the Fan
+  > Content Policy. Not approved/endorsed by Wizards. Portions of the materials
+  > used are property of Wizards of the Coast. ©Wizards of the Coast LLC.
+
+## License
+
+Released under the **GNU General Public License v3.0 or later**. See
+[`LICENSE`](LICENSE) for the full text.

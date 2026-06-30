@@ -1,6 +1,6 @@
-"""The set of expansions 17lands supports, cached to disk for the tray picker.
+"""The set of expansions 17Lands supports, cached to disk for the tray picker.
 
-17lands' ``/data/filters`` endpoint lists every expansion it has data for, the
+17Lands' ``/data/filters`` endpoint lists every expansion it has data for, the
 formats per set, and each set's start date. We cache the parsed payload (TTL ~7
 days; the list changes only on release) so opening the "Download set…" menu never
 touches the network, and expose pure helpers to order the dropdown (newest first)
@@ -69,7 +69,7 @@ class SupportedSets:
         os.replace(tmp, path)
 
     def ensure(self) -> dict:
-        """The 17lands filters dict, cache-first and TTL'd.
+        """The 17Lands filters dict, cache-first and TTL'd.
 
         Never raises: on a network/parse failure it serves a stale cache if one
         exists, else returns ``{}`` so the picker degrades to free-text entry
@@ -83,30 +83,30 @@ class SupportedSets:
                 filters = self.client.fetch_filters()
                 self._write_cache(filters)
                 _log.info(
-                    "Fetched 17lands supported-set list (%d expansions).",
+                    "Fetched 17Lands supported-set list (%d expansions).",
                     len(filters.get("expansions", [])),
                 )
                 return filters
             except SeventeenLandsError as exc:
-                _log.warning("17lands filters fetch failed (%s); using cache if any.", exc)
+                _log.warning("17Lands filters fetch failed (%s); using cache if any.", exc)
         if cached:
-            _log.info("Using cached 17lands supported-set list.")
+            _log.info("Using cached 17Lands supported-set list.")
             return cached.get("filters", {})
         return {}
 
 
-# Arena-only sets whose 17lands format coverage otherwise mimics a real MTGO set.
+# Arena-only sets whose 17Lands format coverage otherwise mimics a real MTGO set.
 _ARENA_ONLY_CODES = frozenset({"HBG", "KLR", "SIR"})
 
-# A set MTGO actually runs offers both of these on 17lands; Alchemy rebalances and
+# A set MTGO actually runs offers both of these on 17Lands; Alchemy rebalances and
 # the cube/chaos event pseudo-sets never list both.
 _MTGO_REQUIRED_FORMATS = frozenset({"PremierDraft", "TradDraft"})
 
 
 def is_mtgo_draftable(code: str, formats: list[str]) -> bool:
-    """Whether a 17lands expansion is also a real MTGO-draftable set.
+    """Whether a 17Lands expansion is also a real MTGO-draftable set.
 
-    17lands lists Arena's whole set universe; this keeps only what MTGO gets.
+    17Lands lists Arena's whole set universe; this keeps only what MTGO gets.
     Dropped: Alchemy rebalances (``Y\\d\\d`` codes, no TradDraft), the Arena
     cube/chaos/remix event pseudo-sets (mixed-case or spaced names), and the
     handful of Arena-only remasters that otherwise look like real set codes.
@@ -119,7 +119,7 @@ def is_mtgo_draftable(code: str, formats: list[str]) -> bool:
 
 
 def codes_newest_first(filters: dict, *, mtgo_only: bool = False) -> list[str]:
-    """Expansion codes ordered newest-first by 17lands start date.
+    """Expansion codes ordered newest-first by 17Lands start date.
 
     Codes with no start date sort last; the blank pseudo-expansion is dropped.
     With ``mtgo_only`` the list is narrowed to MTGO-draftable sets

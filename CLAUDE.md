@@ -2,9 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-A click-through overlay that draws 17lands GIH win rates onto the MTGO draft pick
+A click-through overlay that draws 17Lands GIH win rates onto the MTGO draft pick
 view. Card names come from MTGO's draft log; positions from OpenCV template
-matching; ratings from 17lands. New code lives under `src/mtgo_overlay/`.
+matching; ratings from 17Lands. New code lives under `src/mtgo_overlay/`.
 
 ## The two-OS model (read this first)
 
@@ -80,7 +80,7 @@ every Win32 call guards on `IS_WINDOWS`, so the package imports and the headless
 tests run in WSL. Generated data (Scryfall art, ratings) goes to the writable
 cache dir (`system/paths.py`); only shipped static assets use `resource_path`.
 
-**Data layers**: `data/ratings_repo.py` is CSV-first by default (live 17lands
+**Data layers**: `data/ratings_repo.py` is CSV-first by default (live 17Lands
 endpoint is opt-in via `Settings.use_live_17lands`) with a 24h TTL keyed on an
 embedded `fetched_at`. `recognition/scryfall_art.py` enumerates each card's
 artworks via a Scryfall search and downloads them cache-first behind a 10 req/s

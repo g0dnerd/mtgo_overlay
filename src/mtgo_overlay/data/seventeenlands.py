@@ -1,10 +1,10 @@
-"""Thin HTTP client for 17lands' internal card-ratings endpoint.
+"""Thin HTTP client for 17Lands' internal card-ratings endpoint.
 
 ``GET https://www.17lands.com/card_ratings/data?expansion=<EXP>&format=<FMT>``
 returns a JSON array; each element has a ``name`` and an ``ever_drawn_win_rate``
 (0..1), which is the Game-in-Hand Win Rate shown by the site. This endpoint is
 undocumented/internal (the same data the site's "download to CSV" exposes), not
-an official API — callers pass a polite identifying ``User-Agent`` and the
+an official API - callers pass a polite identifying ``User-Agent`` and the
 repository above caps usage at one request per set/format per 24h.
 """
 
@@ -59,11 +59,11 @@ class SeventeenLandsClient:
             resp.raise_for_status()
             data = resp.json()
         except requests.RequestException as exc:
-            raise SeventeenLandsError(f"17lands request failed: {exc}") from exc
+            raise SeventeenLandsError(f"17Lands request failed: {exc}") from exc
         except ValueError as exc:  # json decode
-            raise SeventeenLandsError(f"17lands returned non-JSON: {exc}") from exc
+            raise SeventeenLandsError(f"17Lands returned non-JSON: {exc}") from exc
         if not isinstance(data, list):
-            raise SeventeenLandsError("17lands response was not a JSON array")
+            raise SeventeenLandsError("17Lands response was not a JSON array")
         return data
 
     def fetch_filters(self) -> dict:
@@ -76,11 +76,13 @@ class SeventeenLandsClient:
             resp.raise_for_status()
             data = resp.json()
         except requests.RequestException as exc:
-            raise SeventeenLandsError(f"17lands filters request failed: {exc}") from exc
+            raise SeventeenLandsError(f"17Lands filters request failed: {exc}") from exc
         except ValueError as exc:  # json decode
-            raise SeventeenLandsError(f"17lands filters returned non-JSON: {exc}") from exc
+            raise SeventeenLandsError(
+                f"17Lands filters returned non-JSON: {exc}"
+            ) from exc
         if not isinstance(data, dict):
-            raise SeventeenLandsError("17lands filters response was not a JSON object")
+            raise SeventeenLandsError("17Lands filters response was not a JSON object")
         return data
 
     @staticmethod

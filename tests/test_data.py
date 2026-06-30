@@ -1,4 +1,4 @@
-"""Data layer: CSV parsing, GIH% mapping, 17lands client, repo TTL + fallback."""
+"""Data layer: CSV parsing, GIH% mapping, 17Lands client, repo TTL + fallback."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ def test_parse_csv(fixtures_dir):
     assert ratings["Lowsample Nobody"] is None
 
 
-# --- 17lands client --------------------------------------------------------
+# --- 17Lands client --------------------------------------------------------
 
 def test_gih_win_rate_mapping(fixtures_dir):
     data = json.loads((fixtures_dir / "ratings" / "sample_17lands.json").read_text())
@@ -224,7 +224,7 @@ def test_repo_live_success(tmp_path, fixtures_dir):
     repo = _repo(tmp_path, client=_StubClient(data=data))
     path = repo.ensure("mh3", "PremierDraft", use_live=True)
     payload = json.loads(path.read_text())
-    assert payload["source"] == "17lands"
+    assert payload["source"] == "17Lands"
     assert payload["ratings"]["The Super Hero Civil War"] == 75.7
 
 
@@ -325,7 +325,7 @@ def test_repo_csv_cache_reused_when_unchanged(tmp_path, fixtures_dir):
 
 @pytest.mark.skipif(
     not os.environ.get("MTGO_OVERLAY_LIVE_17LANDS"),
-    reason="set MTGO_OVERLAY_LIVE_17LANDS=1 to run the live 17lands fetch",
+    reason="set MTGO_OVERLAY_LIVE_17LANDS=1 to run the live 17Lands fetch",
 )
 def test_live_17lands_current_set_has_ratings(tmp_path):
     """End-to-end against the real endpoint: the currently-live premier set, fetched
@@ -347,6 +347,6 @@ def test_live_17lands_current_set_has_ratings(tmp_path):
     path = repo.ensure(premier, fmt, use_live=True, start_date=start)
 
     payload = json.loads(path.read_text())
-    assert payload["source"] == "17lands"
+    assert payload["source"] == "17Lands"
     rated = [v for v in payload["ratings"].values() if isinstance(v, (int, float))]
     assert rated, f"{premier}/{fmt} returned no rated cards"

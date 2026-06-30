@@ -1,7 +1,7 @@
 """Set / format identifiers and the log-code -> expansion mapping.
 
 MTGO draft-log filenames embed a 3-letter set code that, for almost every set,
-equals the uppercase 17lands / Scryfall expansion code (e.g. ``mh3`` -> ``MH3``).
+equals the uppercase 17Lands / Scryfall expansion code (e.g. ``mh3`` -> ``MH3``).
 The few divergences go in ``_LOG_CODE_OVERRIDES``.
 """
 
@@ -11,7 +11,7 @@ from enum import Enum
 
 
 class Format(str, Enum):
-    """17lands ``format`` query values."""
+    """17Lands ``format`` query values."""
 
     PREMIER_DRAFT = "PremierDraft"
     TRAD_DRAFT = "TradDraft"
@@ -20,12 +20,12 @@ class Format(str, Enum):
     TRAD_SEALED = "TradSealed"
 
 
-# Override only when MTGO's 3-letter log code differs from the 17lands code.
+# Override only when MTGO's 3-letter log code differs from the 17Lands code.
 _LOG_CODE_OVERRIDES: dict[str, str] = {}
 
 
 def expansion_from_log_code(code: str) -> str:
-    """Map a 3-letter MTGO log code to its 17lands/Scryfall expansion code."""
+    """Map a 3-letter MTGO log code to its 17Lands/Scryfall expansion code."""
     normalized = code.strip().lower()
     return _LOG_CODE_OVERRIDES.get(normalized, normalized.upper())
 

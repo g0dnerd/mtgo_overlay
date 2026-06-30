@@ -23,6 +23,7 @@ import logging
 import os
 import signal
 import sys
+from datetime import date
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal
@@ -30,7 +31,7 @@ from PySide6.QtWidgets import QApplication
 
 from .capture.screen_capture import capture_client_area
 from .config.settings import Settings
-from .data import expansions, sets
+from .data import embargo, expansions, sets
 from .data.expansions import SupportedSets
 from .data.ratings_repo import (
     GROUP_ALL,
@@ -73,7 +74,7 @@ def map_capture_to_logical(
     """Map a physical-pixel card box to overlay-logical coords.
 
     The overlay is pinned to MTGO's client origin, so this is a pure scale by the
-    device pixel ratio — the last 1920x1080 assumption is gone.
+    device pixel ratio - the last 1920x1080 assumption is gone.
     """
     x, y, w, h = bbox
     if not dpr or dpr == 1.0:
@@ -120,7 +121,7 @@ def _dump_capture(screen, generation: int) -> None:
 
 
 def expansion_from_log_path(path: str) -> str:
-    """Derive the 17lands expansion code from a draft-log filename.
+    """Derive the 17Lands expansion code from a draft-log filename.
 
     Faithful to the old behavior: the 3 chars before ``.txt`` are the set code.
     """
@@ -179,9 +180,7 @@ def _pick_set(codes: list[str], parent=None) -> str | None:
     for code in codes:
         combo.addItem(_set_icon(code, text_color), code)
 
-    buttons = QDialogButtonBox(
-        QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog
-    )
+    buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
     buttons.accepted.connect(dialog.accept)
     buttons.rejected.connect(dialog.reject)
 
@@ -236,9 +235,7 @@ class RecognitionWorker(QRunnable):
                 _log.info(
                     "Cards NOT located (%d): %s", len(missing), "; ".join(missing)
                 )
-            ratings = self.repo.lookup(
-                self.expansion, self.fmt, self.names, self.group
-            )
+            ratings = self.repo.lookup(self.expansion, self.fmt, self.names, self.group)
             self.signals.labelsReady.emit(
                 {
                     "generation": self.generation,
@@ -255,7 +252,17 @@ class RecognitionWorker(QRunnable):
 class _EnsureWorker(QRunnable):
     """Off-UI: warm the ratings cache + (owner's) artwork cache for a draft."""
 
-    def __init__(self, repo, expansion, fmt, names, settings, on_done, start_date=None):
+    def __init__(
+        self,
+        repo,
+        expansion,
+        fmt,
+        names,
+        settings,
+        on_done,
+        start_date=None,
+        use_live=False,
+    ):
         super().__init__()
         self.repo = repo
         self.expansion = expansion
@@ -263,6 +270,7 @@ class _EnsureWorker(QRunnable):
         self.names = names
         self.settings = settings
         self.start_date = start_date
+        self.use_live = use_live
         self._on_done = on_done
         self.signals = _WorkerSignals()
         self.signals.labelsReady.connect(lambda _p: on_done())
@@ -283,7 +291,7 @@ class _EnsureWorker(QRunnable):
                 self.repo.ensure(
                     self.expansion,
                     self.fmt,
-                    use_live=self.settings.use_live_17lands,
+                    use_live=self.use_live,
                     group=group,
                     csv_path=csv_path,
                     start_date=self.start_date,
@@ -293,7 +301,7 @@ class _EnsureWorker(QRunnable):
         try:
             _log.info(
                 "Warming Scryfall artwork cache for %s (cache-first; the first draft "
-                "of a set downloads art at <=10 req/s and can take a while).",
+                "of a set downloads all of that set's artwork and can take a while).",
                 self.expansion,
             )
             scryfall_art.ensure_set_artwork(
@@ -302,25 +310,26 @@ class _EnsureWorker(QRunnable):
         except Exception as exc:  # noqa: BLE001
             _log.warning("Artwork warm failed: %s", exc)
         _log.info(
-            "Draft data ready for %s — recognition can now run offline.", self.expansion
+            "Draft data ready for %s - recognition can now run offline.", self.expansion
         )
         self.signals.labelsReady.emit(None)
 
 
 class _PrefetchWorker(QRunnable):
     """Off-UI: enumerate a whole set on Scryfall, warm its artwork cache, and warm
-    its 17lands ratings — so the next live draft of the set runs fully offline.
+    its 17Lands ratings - so the next live draft of the set runs fully offline.
 
     Backs the tray's manual "Download set…" action (the live path only warms
-    per-pack). Ratings are best-effort: a 17lands hiccup never fails the slow,
+    per-pack). Ratings are best-effort: a 17Lands hiccup never fails the slow,
     valuable art download."""
 
-    def __init__(self, expansion, fmt, repo, on_done, start_date=None):
+    def __init__(self, expansion, fmt, repo, on_done, start_date=None, use_live=True):
         super().__init__()
         self.expansion = expansion
         self.fmt = fmt
         self.repo = repo
         self.start_date = start_date
+        self.use_live = use_live
         self.signals = _WorkerSignals()
         self.signals.labelsReady.connect(on_done)
 
@@ -347,20 +356,32 @@ class _PrefetchWorker(QRunnable):
             return
         ratings_ok = True
         for group in RATING_GROUPS:
+            if not self.use_live:
+                ratings_ok = False
+                break
             try:
                 _log.info(
-                    "Warming 17lands ratings for %s/%s/%s...",
-                    self.expansion, self.fmt, group,
+                    "Loading 17Lands ratings for %s/%s/%s...",
+                    self.expansion,
+                    self.fmt,
+                    group,
                 )
                 self.repo.ensure(
-                    self.expansion, self.fmt, use_live=True, group=group,
-                    csv_path=None, start_date=self.start_date,
+                    self.expansion,
+                    self.fmt,
+                    use_live=True,
+                    group=group,
+                    csv_path=None,
+                    start_date=self.start_date,
                 )
             except Exception as exc:  # noqa: BLE001 - ratings is best-effort here
                 ratings_ok = False
                 _log.warning(
-                    "Ratings warm failed for %s/%s/%s: %s",
-                    self.expansion, self.fmt, group, exc,
+                    "Failed to load ratings for %s/%s/%s: %s",
+                    self.expansion,
+                    self.fmt,
+                    group,
+                    exc,
                 )
         self.signals.labelsReady.emit(
             {
@@ -368,12 +389,13 @@ class _PrefetchWorker(QRunnable):
                 "count": len(names),
                 "ok": True,
                 "ratings_ok": ratings_ok,
+                "embargoed": not self.use_live,
             }
         )
 
 
 class _SupportedSetsWorker(QRunnable):
-    """Off-UI: load (cache-first) the 17lands supported-set list for the picker, so
+    """Off-UI: load (cache-first) the 17Lands supported-set list for the picker, so
     the tray menu never does network on the UI thread."""
 
     def __init__(self, supported, on_done):
@@ -423,6 +445,9 @@ class AppController(QObject):
         # True between a pick and the next pack: the picked pack lingers in
         # Log.current_pack, so suppress recognition until a new pack lands.
         self._awaiting_pack = False
+        # True when the active set's live data is under the 17Lands embargo and no
+        # CSV fallback exists: recognition is suppressed in favor of a notice.
+        self._embargo_block = False
 
         self._debounce = QTimer(self)
         self._debounce.setSingleShot(True)
@@ -449,9 +474,9 @@ class AppController(QObject):
         self._setup_tray()
         _log.info("Tray icon shown.")
         self.overlay.show()
-        _log.info("Overlay window shown (frameless, transparent, click-through).")
+        _log.info("Overlay window shown.")
         self.tracker.start()
-        _log.info("Window tracker started — polling for the MTGO window at 10 Hz.")
+        _log.info("Window tracker started - polling for the MTGO window at 10 Hz.")
         self.pool.start(_SupportedSetsWorker(self._supported, self._on_supported_sets))
         self._restart_watcher()
         self._maybe_show_setup_toast()
@@ -459,7 +484,7 @@ class AppController(QObject):
     def _maybe_run_onboarding(self) -> None:
         if not needs_onboarding(self.settings):
             return
-        _log.info("First run / disclaimer not accepted — showing onboarding wizard.")
+        _log.info("First run / disclaimer not accepted - showing onboarding wizard.")
         if run_onboarding(self.settings):
             _log.info("Onboarding completed.")
         else:
@@ -485,7 +510,7 @@ class AppController(QObject):
         missing = self._missing_setup()
         if missing:
             self._tray.showMessage(
-                "MTGO 17lands Overlay — setup needed",
+                "MTGO Draft Helper - setup needed",
                 "Still to configure: "
                 + ", ".join(missing)
                 + ". Open the tray menu → 'Setup status…' to finish.",
@@ -496,11 +521,11 @@ class AppController(QObject):
         _log.info(
             "Config: %s (%s).",
             cfg_path,
-            "loaded" if cfg_path.exists() else "not found — using defaults",
+            "loaded" if cfg_path.exists() else "not found - using defaults",
         )
         _log.info(
             "MTGO username: %s",
-            self.settings.mtgo_username or "NOT SET — set it from the tray menu",
+            self.settings.mtgo_username or "NOT SET - set it from the tray menu",
         )
         if self.settings.log_dir:
             _log.info(
@@ -509,10 +534,10 @@ class AppController(QObject):
                 Path(self.settings.log_dir).is_dir(),
             )
         else:
-            _log.info("Log folder: NOT SET — set it from the tray menu.")
+            _log.info("Log folder: NOT SET - set it from the tray menu.")
         _log.info("Draft format: %s", self.settings.fmt)
         if self.settings.use_live_17lands:
-            _log.info("Ratings source: live 17lands endpoint.")
+            _log.info("Ratings source: live 17Lands endpoint.")
         elif self.settings.manual_csv_path:
             _log.info(
                 "Ratings source: CSV %s (exists=%s).",
@@ -521,9 +546,9 @@ class AppController(QObject):
             )
         else:
             _log.warning(
-                "Ratings source: none configured — every label will read 'GIH N/A'. "
-                "Set manual_csv_path in %s to a 17lands card_ratings.csv export, or "
-                "set use_live_17lands=true.",
+                "Ratings source: none configured - every label will read 'N/A'. "
+                "Set manual_csv_path in %s to a 17Lands card_ratings.csv export, or "
+                "set use_live_17lands=true in config.toml.",
                 cfg_path,
             )
         _log.info(
@@ -581,6 +606,8 @@ class AppController(QObject):
         )
         self._draft_prepared = False
         self._awaiting_pack = False
+        self._embargo_block = False
+        self.overlay.set_notice(None)
         # MTGO (and the replay tool) usually create the log file before the first
         # pack is written, so current_pack is empty here. Defer warming to the
         # first real pack instead of warming artwork for 0 names.
@@ -588,15 +615,48 @@ class AppController(QObject):
             self._prepare_draft_data()
 
     def _start_date_for(self, expansion: str) -> str | None:
-        """The set's 17lands start date (``YYYY-MM-DD``) for a lifetime-spanning
+        """The set's 17Lands start date (``YYYY-MM-DD``) for a lifetime-spanning
         live fetch, or ``None`` if the supported-set list isn't loaded yet."""
         raw = self._filters.get("start_dates", {}).get(expansion.upper())
         return raw[:10] if isinstance(raw, str) and raw else None
+
+    def _live_blocked(self, expansion: str) -> bool:
+        """Whether the live 17Lands fetch must be withheld for this set - either
+        because live mode is off, or because the set is still under 17Lands'
+        new-set embargo (fail-closed when the release date is unknown)."""
+        if not self.settings.use_live_17lands:
+            return False
+        return not embargo.live_data_allowed(
+            self._start_date_for(expansion), date.today()
+        )
+
+    def _embargo_notice(self, expansion: str) -> str:
+        lift = embargo.lift_date(self._start_date_for(expansion))
+        when = f"{lift.strftime('%b')} {lift.day}, {lift.year}" if lift else None
+        return (
+            f"17Lands data for {expansion} available {when}"
+            if when
+            else f"17Lands data for {expansion} not yet available"
+        )
 
     def _prepare_draft_data(self) -> None:
         """Warm ratings + artwork for the current pack, then recognize. Runs once
         per draft, as soon as a non-empty pack is known."""
         self._draft_prepared = True
+        blocked = self._live_blocked(self.expansion)
+        # Embargoed with no CSV fallback: nothing to show, so suppress pills and
+        # surface a notice (which doubles as the 17Lands citation) instead.
+        self._embargo_block = blocked and not self.settings.manual_csv_path
+        if self._embargo_block:
+            _log.info(
+                "Live 17Lands data for %s is under the new-set embargo and no CSV "
+                "is set; showing a notice instead of pills.",
+                self.expansion,
+            )
+            self.overlay.clear()
+            self.overlay.set_notice(self._embargo_notice(self.expansion))
+            return
+        self.overlay.set_notice(None)
         worker = _EnsureWorker(
             self.repo,
             self.expansion,
@@ -605,6 +665,7 @@ class AppController(QObject):
             self.settings,
             self._schedule_recognition,
             start_date=self._start_date_for(self.expansion),
+            use_live=self.settings.use_live_17lands and not blocked,
         )
         self.pool.start(worker)
 
@@ -630,9 +691,11 @@ class AppController(QObject):
     def _finish_draft(self) -> None:
         _log.info("Draft finished. Waiting for the next one.")
         self.log = None
+        self._embargo_block = False
         if self.watcher is not None:
             self.watcher.set_active_log(None)
         self.overlay.clear()
+        self.overlay.set_notice(None)
 
     # --- recognition ---------------------------------------------------------
 
@@ -642,6 +705,8 @@ class AppController(QObject):
     def _dispatch_recognition(self) -> None:
         if self.log is None or not self.log.current_pack or self._awaiting_pack:
             return
+        if self._embargo_block:
+            return  # embargoed set with no CSV: the notice stands in for pills
         hwnd = self.tracker.hwnd or win32.find_mtgo_hwnd()
         if hwnd is None:
             _log.warning("Cannot recognize: MTGO window not found.")
@@ -649,7 +714,7 @@ class AppController(QObject):
         # Capturing a backgrounded window yields a black/stale frame, so skip the
         # doomed work; the refocus handler re-runs recognition when MTGO returns.
         if win32.get_foreground_hwnd() != hwnd:
-            _log.info("MTGO not focused — deferring recognition until refocus.")
+            _log.info("MTGO not focused - deferring recognition until refocus.")
             return
         self._generation += 1
         gen = self._generation
@@ -739,14 +804,14 @@ class AppController(QObject):
     def _on_lost(self) -> None:
         if self._mtgo_present:
             self._mtgo_present = False
-            _log.info("MTGO window lost — clearing overlay.")
+            _log.info("MTGO window lost - clearing overlay.")
         self.overlay.clear()
 
     def _on_focus_changed(self, focused: bool) -> None:
         # Keep the labels but hide the window when MTGO isn't the active window,
         # so the overlay never plasters win rates over other apps.
         _log.debug(
-            "MTGO %s focus — overlay %s.",
+            "MTGO %s focus - overlay %s.",
             "gained" if focused else "lost",
             "shown" if focused else "hidden",
         )
@@ -767,7 +832,7 @@ class AppController(QObject):
         icon_path = resource_path("assets/tray.ico")
         icon = QIcon(str(icon_path)) if icon_path.exists() else QIcon()
         self._tray = QSystemTrayIcon(icon, self.app)
-        self._tray.setToolTip("MTGO 17lands Overlay")
+        self._tray.setToolTip("MTGO Draft Helper")
         self._tray.setContextMenu(self._build_menu())
         self._tray.show()
 
@@ -784,7 +849,15 @@ class AppController(QObject):
         menu = QMenu()
         menu.setToolTipsVisible(True)
 
-        # Connection setup — the things the overlay needs to find drafts.
+        # Top-level 17Lands credit + link to the data's source page, per their
+        # usage guidelines (kept visible, not buried in a submenu/footnote).
+        credit = QAction("Win-rate data from 17Lands", menu)
+        credit.setToolTip("Opens 17Lands' card data page in your browser.")
+        credit.triggered.connect(self._open_17lands)
+        menu.addAction(credit)
+        menu.addSeparator()
+
+        # Connection setup - the things the overlay needs to find drafts.
         for text, slot in (
             ("Enter MTGO username", self._prompt_username),
             ("Change log folder", self._prompt_log_folder),
@@ -812,13 +885,13 @@ class AppController(QObject):
             menu.addAction(action)
 
         # With the live endpoint on, the CSV is only an automatic offline
-        # fallback — so the picker is greyed out rather than presented as a source.
+        # fallback - so the picker is greyed out rather than presented as a source.
         csv_action = QAction("Set ratings CSV", menu)
         csv_action.triggered.connect(self._prompt_ratings_csv)
         if self.settings.use_live_17lands:
             csv_action.setEnabled(False)
             csv_action.setToolTip(
-                "Using live 17lands data; the CSV is only a fallback when offline."
+                "Using live 17Lands data; the CSV is only a fallback when offline."
             )
         menu.addAction(csv_action)
 
@@ -857,43 +930,54 @@ class AppController(QObject):
 
     def _prefetch_set(self, expansion: str) -> None:
         fmt = expansions.format_for(expansion, self.settings.fmt, self._filters)
+        # The live ratings warm is the same scrape the embargo gates, so a manual
+        # download of a new set still skips ratings (art is fine) until it lifts.
+        live = not self._live_blocked(expansion)
+        ratings_note = "ratings" if live else "art only (ratings embargoed)"
         _log.info(
-            "Manual download requested for %s (art + %s ratings).", expansion, fmt
+            "Manual download requested for %s (art + %s).", expansion, ratings_note
         )
         if self._tray is not None:
             self._tray.showMessage(
-                "MTGO 17lands Overlay",
-                f"Downloading {expansion} card art + ratings — first run can take a "
+                "MTGO Draft Helper",
+                f"Downloading {expansion} card {ratings_note} - first run can take a "
                 f"minute or two; watch the terminal/log for progress.",
             )
         self.pool.start(
             _PrefetchWorker(
-                expansion, fmt, self.repo, self._on_prefetch_done,
+                expansion,
+                fmt,
+                self.repo,
+                self._on_prefetch_done,
                 start_date=self._start_date_for(expansion),
+                use_live=live,
             )
         )
 
     def _on_prefetch_done(self, result: dict) -> None:
         if result.get("ok"):
-            ratings = (
-                "ratings cached" if result.get("ratings_ok") else "ratings unavailable"
-            )
+            if result.get("ratings_ok"):
+                ratings = "ratings cached"
+            elif result.get("embargoed"):
+                ratings = "ratings embargoed"
+            else:
+                ratings = "ratings unavailable"
             msg = (
-                f"{result['expansion']} ready — {result['count']} card(s) art cached, "
+                f"{result['expansion']} ready - {result['count']} card(s) art cached, "
                 f"{ratings}."
             )
         else:
             msg = f"{result['expansion']} download failed: {result.get('error', 'see log')}"
         _log.info("%s", msg)
         if self._tray is not None:
-            self._tray.showMessage("MTGO 17lands Overlay", msg)
+            self._tray.showMessage("MTGO Draft Helper", msg)
 
     def _prompt_ratings_csv(self) -> None:
         from PySide6.QtWidgets import QFileDialog
 
         path, _ = QFileDialog.getOpenFileName(
             None,
-            "Select 17lands card_ratings CSV",
+            "Select 17Lands card_ratings CSV",
             "",
             "CSV files (*.csv);;All files (*)",
         )
@@ -954,7 +1038,7 @@ class AppController(QObject):
         from PySide6.QtWidgets import QMessageBox
 
         if self.settings.use_live_17lands:
-            ratings = "live 17lands"
+            ratings = "live 17Lands"
         elif self.settings.manual_csv_path:
             ratings = f"CSV ({self.settings.manual_csv_path})"
         else:
@@ -978,24 +1062,34 @@ class AppController(QObject):
             self._refresh_tray()
             self._restart_watcher()
 
+    def _open_17lands(self) -> None:
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        QDesktopServices.openUrl(QUrl("https://www.17lands.com/card_data"))
+
     def _show_about(self) -> None:
         from PySide6.QtCore import Qt
         from PySide6.QtWidgets import QMessageBox
 
         repo = "https://github.com/g0dnerd/mtgo_overlay"
         box = QMessageBox()
-        box.setWindowTitle("About MTGO 17lands Overlay")
+        box.setWindowTitle("About MTGO Draft Helper")
         box.setTextFormat(Qt.RichText)
         box.setText(
-            f"<b>MTGO 17lands Overlay</b><br>Version {__version__}<br><br>"
+            f"<b>MTGO Draft Helper</b><br>Version {__version__}<br><br>"
             "Draws 17Lands Game-in-Hand win rates onto the MTGO draft pick view."
         )
         box.setInformativeText(
             "Not affiliated with, endorsed by, or sponsored by 17Lands or Wizards "
             "of the Coast.<br><br>"
-            f"Open source (GPL-3.0): <a href=\"{repo}\">{repo}</a><br><br>"
+            f'Open source (GPL-3.0): <a href="{repo}">{repo}</a><br><br>'
             "Win-rate data courtesy of 17Lands. Card data &amp; images courtesy of "
-            "Scryfall."
+            "Scryfall.<br><br>"
+            "MTGO Draft Helper is unofficial Fan Content permitted under the "
+            "Fan Content Policy. Not approved/endorsed by Wizards. Portions of the "
+            "materials used are property of Wizards of the Coast. "
+            "&copy;Wizards of the Coast LLC."
         )
         box.exec()
 
@@ -1034,7 +1128,7 @@ class AppController(QObject):
         self._restart_watcher()
         if self._tray is not None:
             self._tray.showMessage(
-                "MTGO 17lands Overlay",
+                "MTGO Draft Helper",
                 "Local data cleared. Re-enter your MTGO username and log folder "
                 "from the tray menu.",
             )
@@ -1050,7 +1144,7 @@ class AppController(QObject):
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     logging_setup.setup()
-    _log.info("=== MTGO 17lands Overlay starting ===")
+    _log.info("=== MTGO Draft Helper starting ===")
     _log.info(
         "Python %s | platform=%s | pid=%d | frozen=%s",
         sys.version.split()[0],
@@ -1082,9 +1176,9 @@ def main(argv: list[str] | None = None) -> int:
     sigint_timer.start()
 
     _log.info(
-        "Startup complete — entering the Qt event loop. From here this terminal "
-        "will look idle; that is normal. The app lives in the system tray: use its "
-        "menu to configure, then start a draft. Quit via the tray's Exit (or Ctrl+C)."
+        "Startup complete - entering the Qt event loop."
+        "The app lives in the system tray: use its menu to configure, then start a draft. "
+        "Quit via the tray's Exit (or Ctrl+C)."
     )
     rc = app.exec()
     controller.shutdown()

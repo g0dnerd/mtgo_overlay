@@ -43,7 +43,7 @@ MIN_REQUEST_INTERVAL = DEFAULT_REQUEST_INTERVAL  # back-compat alias
 RATE_LIMIT_COOLDOWN = 30.0
 MAX_RETRIES = 3
 _SEARCH_PATHS = ("/cards/search", "/cards/named", "/cards/random", "/cards/collection")
-USER_AGENT = "MtgoOverlay/0.2 (https://github.com/; MTGO draft overlay; personal use)"
+USER_AGENT = "MtgoOverlay/0.2 (+https://github.com/g0dnerd/mtgo_overlay; MTGO draft overlay; personal use)"
 
 
 @dataclass(frozen=True)

@@ -11,10 +11,9 @@ import pytest
 
 from mtgo_overlay.config.settings import Settings
 from mtgo_overlay.onboarding.wizard import (
-    LogFolderPage,
     OnboardingWizard,
     PrivacyPage,
-    UsernamePage,
+    SetupPage,
     likely_mtgo_log_dir,
     needs_onboarding,
 )
@@ -35,9 +34,9 @@ def test_likely_mtgo_log_dir_empty_without_appdata(monkeypatch):
     assert likely_mtgo_log_dir() == ""
 
 
-def test_wizard_has_four_pages(qapp):
+def test_wizard_has_three_pages(qapp):
     wizard = OnboardingWizard(Settings())
-    assert len(wizard.pageIds()) == 4
+    assert len(wizard.pageIds()) == 3
 
 
 def _settings(tmp_path, monkeypatch) -> Settings:
@@ -55,43 +54,70 @@ def test_privacy_page_gates_then_commits_consent(qapp, tmp_path, monkeypatch):
 
     assert page.validatePage() is True
     assert settings.accepted_disclaimer is True
-    assert settings.use_live_17lands is True  # consent enables the live endpoint
+    # Consent no longer picks a data source; that's the setup page's job.
+    assert settings.use_live_17lands is False
 
     # Persisted, so the gate won't re-fire next launch.
     assert Settings.load().accepted_disclaimer is True
-    assert Settings.load().use_live_17lands is True
 
 
-def test_log_folder_page_commits(qapp, tmp_path, monkeypatch):
+def test_setup_page_requires_folder_and_username(qapp, tmp_path, monkeypatch):
     settings = _settings(tmp_path, monkeypatch)
-    page = LogFolderPage(settings)
+    page = SetupPage(settings)
 
-    assert page.isComplete() is False
+    assert page.isComplete() is False  # nothing entered yet
     page.path_edit.setText(str(tmp_path / "logs"))
-    assert page.isComplete() is True
+    assert page.isComplete() is False  # username still missing
+    page.name_edit.setText("  Tester  ")
+    assert page.isComplete() is True  # live is the default source
+
+
+def test_setup_page_live_choice_commits(qapp, tmp_path, monkeypatch):
+    settings = _settings(tmp_path, monkeypatch)
+    page = SetupPage(settings)
+    page.path_edit.setText(str(tmp_path / "logs"))
+    page.name_edit.setText("Tester")
 
     assert page.validatePage() is True
     assert settings.log_dir == str(tmp_path / "logs")
-    assert Settings.load().log_dir == str(tmp_path / "logs")
+    assert settings.mtgo_username == "Tester"  # stripped on the line edit
+    assert settings.use_live_17lands is True
+    loaded = Settings.load()
+    assert loaded.use_live_17lands is True
+    assert loaded.log_dir == str(tmp_path / "logs")
 
 
-def test_username_page_commits_and_strips(qapp, tmp_path, monkeypatch):
+def test_setup_page_csv_choice_requires_path_then_commits(qapp, tmp_path, monkeypatch):
     settings = _settings(tmp_path, monkeypatch)
-    page = UsernamePage(settings)
+    page = SetupPage(settings)
+    page.path_edit.setText(str(tmp_path / "logs"))
+    page.name_edit.setText("Tester")
+    page.csv_radio.setChecked(True)
 
-    assert page.isComplete() is False
-    page.name_edit.setText("  Tester  ")
+    assert page.isComplete() is False  # CSV picked but no file yet
+    csv = tmp_path / "card_ratings.csv"
+    page.csv_edit.setText(str(csv))
     assert page.isComplete() is True
 
-    page.validatePage()
-    assert settings.mtgo_username == "Tester"
-    assert Settings.load().mtgo_username == "Tester"
+    assert page.validatePage() is True
+    assert settings.use_live_17lands is False
+    assert settings.manual_csv_path == str(csv)
+    assert Settings.load().manual_csv_path == str(csv)
 
 
-def test_pages_prepopulate_from_settings(qapp):
+def test_setup_page_defaults_to_csv_when_already_configured(qapp):
+    settings = Settings(manual_csv_path="/x/r.csv", use_live_17lands=False)
+    page = SetupPage(settings)
+    assert page.csv_radio.isChecked() is True
+    assert page.live_radio.isChecked() is False
+
+
+def test_setup_page_prepopulates_from_settings(qapp):
     settings = Settings(mtgo_username="Ann", log_dir="/x/logs")
-    assert UsernamePage(settings).name_edit.text() == "Ann"
-    assert LogFolderPage(settings).path_edit.text() == "/x/logs"
+    page = SetupPage(settings)
+    assert page.name_edit.text() == "Ann"
+    assert page.path_edit.text() == "/x/logs"
+    assert page.live_radio.isChecked() is True  # live default
 
 
 def test_start_gate_runs_wizard_only_when_unaccepted(qapp, tmp_path, monkeypatch):

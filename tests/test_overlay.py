@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from mtgo_overlay.config.settings import OverlayStyle
 from mtgo_overlay.overlay.overlay_window import (
+    CITATION,
     LabelSpec,
     OverlayWindow,
     percentile_rank,
@@ -27,6 +28,23 @@ CARDS = [
     LabelSpec(62.1, 0.60, 300, 100, 120, 168),
     LabelSpec(None, None, 100, 320, 120, 168),
 ]
+
+
+def test_caption_is_citation_when_pills_show_and_blank_when_idle(qapp):
+    win = OverlayWindow(OverlayStyle())
+    assert win.caption_text() is None  # nothing on screen, no caption
+    win.set_labels(CARDS)
+    assert win.caption_text() == CITATION  # 17Lands credit rides along with pills
+
+
+def test_notice_overrides_citation_and_survives_clear(qapp):
+    win = OverlayWindow(OverlayStyle())
+    win.set_notice("17Lands data for FIN available Jun 12, 2026")
+    assert win.caption_text() == "17Lands data for FIN available Jun 12, 2026"
+    win.clear()  # an embargo notice persists even with no pills
+    assert win.caption_text() == "17Lands data for FIN available Jun 12, 2026"
+    win.set_notice(None)
+    assert win.caption_text() is None
 
 
 def test_labels_lie_within_their_card_boxes(qapp):

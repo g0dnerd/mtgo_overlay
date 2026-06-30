@@ -51,7 +51,9 @@ def main() -> int:
     out_path = args.out or args.screenshot.with_suffix(".gt.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    print(f"Wrote {len(slots)} proposed boxes to {out_path} — correct names/boxes by hand.")
+    print(
+        f"Wrote {len(slots)} proposed boxes to {out_path} - correct names/boxes by hand."
+    )
     return 0
 
 
