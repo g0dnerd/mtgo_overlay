@@ -29,6 +29,60 @@ def test_rate_limiter_enforces_interval():
     assert time.monotonic() - start >= 0.045
 
 
+def test_limiter_for_routes_search_vs_other():
+    assert (
+        scryfall_art._limiter_for("https://api.scryfall.com/cards/search?q=x")
+        is scryfall_art._search_limiter
+    )
+    assert (
+        scryfall_art._limiter_for("https://cards.scryfall.io/png/front.png")
+        is scryfall_art._default_limiter
+    )
+
+
+def test_http_get_backs_off_and_retries_on_429(monkeypatch):
+    class R:
+        def __init__(self, status, headers=None):
+            self.status_code = status
+            self.headers = headers or {}
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.HTTPError(response=self)
+
+    calls = {"n": 0}
+
+    def fake_get(url, params=None, timeout=None):
+        calls["n"] += 1
+        return R(429, {"Retry-After": "2"}) if calls["n"] == 1 else R(200)
+
+    sleeps: list[float] = []
+    monkeypatch.setattr(scryfall_art._session, "get", fake_get)
+    monkeypatch.setattr(scryfall_art._default_limiter, "wait", lambda: None)
+    monkeypatch.setattr(scryfall_art.time, "sleep", lambda s: sleeps.append(s))
+
+    resp = scryfall_art._http_get("https://api.scryfall.com/x")
+    assert resp.status_code == 200
+    assert calls["n"] == 2  # retried after the 429
+    assert sleeps == [2.0]  # honoured Retry-After
+
+
+def test_http_get_raises_after_exhausting_429_retries(monkeypatch):
+    class R:
+        status_code = 429
+        headers = {"Retry-After": "1"}
+
+        def raise_for_status(self):
+            raise requests.HTTPError(response=self)
+
+    monkeypatch.setattr(scryfall_art._session, "get", lambda *a, **k: R())
+    monkeypatch.setattr(scryfall_art._default_limiter, "wait", lambda: None)
+    monkeypatch.setattr(scryfall_art.time, "sleep", lambda s: None)
+
+    with pytest.raises(requests.HTTPError):
+        scryfall_art._http_get("https://api.scryfall.com/x")
+
+
 def test_image_url_prefers_png_then_falls_back():
     assert scryfall_art._image_url({"image_uris": {"png": "p", "large": "l"}}) == "p"
     assert scryfall_art._image_url({"image_uris": {"large": "l"}}) == "l"
@@ -68,6 +122,41 @@ def test_booster_artwork_ids_queries_and_caches(tmp_path, monkeypatch):
     assert again == refs
     cache = json.loads((tmp_path / "MSH_variants.json").read_text())
     assert cache["X"][0]["scryfall_id"] == "a1"
+
+
+def test_enumerate_set_cards_paginates_and_dedups(monkeypatch):
+    pages = [
+        FakeResp({
+            "has_more": True,
+            "next_page": "http://api/next",
+            "data": [{"name": "Alpha"}, {"name": "Beta"}],
+        }),
+        FakeResp({
+            "has_more": False,
+            "data": [{"name": "Beta"}, {"name": "Gamma"}],
+        }),
+    ]
+    calls = {"n": 0}
+
+    def fake_get(url, params=None):
+        resp = pages[calls["n"]]
+        calls["n"] += 1
+        return resp
+
+    monkeypatch.setattr(scryfall_art, "_http_get", fake_get)
+    names = scryfall_art.enumerate_set_cards("MSH")
+    assert names == ["Alpha", "Beta", "Gamma"]  # order preserved, deduped
+    assert calls["n"] == 2  # paginated
+
+
+def test_enumerate_set_cards_404_returns_empty(monkeypatch):
+    def fake_get(url, params=None):
+        resp = requests.Response()
+        resp.status_code = 404
+        raise requests.HTTPError(response=resp)
+
+    monkeypatch.setattr(scryfall_art, "_http_get", fake_get)
+    assert scryfall_art.enumerate_set_cards("ZZZ") == []
 
 
 def test_booster_artwork_ids_404_returns_empty(tmp_path, monkeypatch):

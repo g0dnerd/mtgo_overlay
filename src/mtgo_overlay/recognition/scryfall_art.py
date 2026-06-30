@@ -6,9 +6,12 @@ req/s rate limit, and the ``{name: [variants]}`` model are reused. The heavyweig
 a direct Scryfall search (``set:<exp> !"name" unique=prints``), so it runs without
 curated per-set data and warms the cache per draft.
 
-Scryfall asks for a descriptive User-Agent, an Accept header, and 50-100 ms
-between requests. All requests (search + image) funnel through one rate limiter,
-and results are cached so re-runs (and the recognition hot path) stay offline.
+Scryfall asks for a descriptive User-Agent and an Accept header, and enforces
+per-endpoint hard rate limits: the ``/cards/*`` search-family endpoints are
+2/second (500 ms), every other API method is 10/second (100 ms), and the
+``*.scryfall.io`` image origins are unlimited. Requests are routed to the right
+limiter by URL, HTTP 429s are honoured with backoff, and results are cached so
+re-runs (and the recognition hot path) stay offline.
 """
 
 from __future__ import annotations
@@ -28,8 +31,16 @@ from ..system.logging_setup import get_logger
 _log = get_logger("scryfall")
 
 SCRYFALL_API = "https://api.scryfall.com"
-# 10 req/s — Scryfall's politeness guidance.
-MIN_REQUEST_INTERVAL = 0.1
+# Scryfall's per-endpoint hard limits. The search family (/cards/search,
+# /cards/named, /cards/random, /cards/collection) is 2/s; every other API method
+# is 10/s. The *.scryfall.io image origins are unlimited but we throttle them too.
+SEARCH_REQUEST_INTERVAL = 0.5
+DEFAULT_REQUEST_INTERVAL = 0.1
+MIN_REQUEST_INTERVAL = DEFAULT_REQUEST_INTERVAL  # back-compat alias
+# A 429 limits access for ~30s; ignoring it risks a ban, so we back off and retry.
+RATE_LIMIT_COOLDOWN = 30.0
+MAX_RETRIES = 3
+_SEARCH_PATHS = ("/cards/search", "/cards/named", "/cards/random", "/cards/collection")
 USER_AGENT = "MtgoOverlay/0.2 (https://github.com/; MTGO draft overlay; personal use)"
 
 
@@ -56,17 +67,52 @@ class _RateLimiter:
             self._last = time.monotonic()
 
 
-_limiter = _RateLimiter(MIN_REQUEST_INTERVAL)
+_search_limiter = _RateLimiter(SEARCH_REQUEST_INTERVAL)
+_default_limiter = _RateLimiter(DEFAULT_REQUEST_INTERVAL)
 _session = requests.Session()
 _session.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
 _variants_lock = threading.Lock()
 
 
+def _limiter_for(url: str) -> _RateLimiter:
+    if "api.scryfall.com" in url and any(p in url for p in _SEARCH_PATHS):
+        return _search_limiter
+    return _default_limiter
+
+
+def _retry_after_seconds(resp: requests.Response) -> float:
+    """Seconds to wait after a 429: honour Retry-After, else the 30s cooldown."""
+    header = resp.headers.get("Retry-After")
+    if header:
+        try:
+            return min(max(float(header), 1.0), 60.0)
+        except ValueError:
+            pass
+    return RATE_LIMIT_COOLDOWN
+
+
 def _http_get(url: str, params: dict | None = None) -> requests.Response:
-    """Single rate-limited choke point for every Scryfall request."""
-    _limiter.wait()
-    resp = _session.get(url, params=params, timeout=15)
-    resp.raise_for_status()
+    """Single rate-limited choke point for every Scryfall request.
+
+    Routes to the correct per-endpoint limiter and backs off on HTTP 429 rather
+    than hammering the API through its 30s penalty window.
+    """
+    limiter = _limiter_for(url)
+    resp = None
+    for attempt in range(MAX_RETRIES):
+        limiter.wait()
+        resp = _session.get(url, params=params, timeout=15)
+        if resp.status_code == 429:
+            wait = _retry_after_seconds(resp)
+            _log.warning(
+                "Scryfall 429 (attempt %d/%d); backing off %.0fs",
+                attempt + 1, MAX_RETRIES, wait,
+            )
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        return resp
+    resp.raise_for_status()  # exhausted retries while still 429
     return resp
 
 
@@ -110,6 +156,35 @@ def _query_scryfall_prints(expansion: str, name: str) -> list[ArtRef]:
         url = data.get("next_page") if data.get("has_more") else None
         params = None  # next_page already carries the query
     return refs
+
+
+def enumerate_set_cards(expansion: str) -> list[str]:
+    """All distinct card names in ``expansion`` (one paginated Scryfall search).
+
+    The live hot path warms artwork per-pack from the draft log; this exists for
+    the manual "download a whole set" action, where there is no pack yet. Returns
+    ``[]`` for an unknown set code.
+    """
+    params: dict | None = {"q": f"set:{expansion.lower()}", "unique": "cards"}
+    url = f"{SCRYFALL_API}/cards/search"
+    names: list[str] = []
+    seen: set[str] = set()
+    while url:
+        try:
+            resp = _http_get(url, params=params)
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                return []
+            raise
+        data = resp.json()
+        for card in data.get("data", []):
+            name = card.get("name")
+            if name and name not in seen:
+                seen.add(name)
+                names.append(name)
+        url = data.get("next_page") if data.get("has_more") else None
+        params = None  # next_page already carries the query
+    return names
 
 
 def _variants_path(expansion: str, cache_dir: Path) -> Path:
