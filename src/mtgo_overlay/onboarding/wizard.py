@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..config.settings import Settings
+from ..draft.log_parser import infer_mtgo_username
 
 REPO_URL = "https://github.com/g0dnerd/mtgo_overlay"
 
@@ -203,6 +204,15 @@ class SetupPage(_Page):
         folder = QFileDialog.getExistingDirectory(self, "Select MTGO log folder", start)
         if folder:
             self.path_edit.setText(folder)
+            self._prefill_username(folder)
+
+    def _prefill_username(self, folder: str) -> None:
+        """Pre-fill the username from existing logs, unless the user typed one."""
+        if self.name_edit.text().strip():
+            return
+        guess = infer_mtgo_username(folder)
+        if guess:
+            self.name_edit.setText(guess)
 
     def _browse_csv(self) -> None:
         path, _ = QFileDialog.getOpenFileName(

@@ -120,6 +120,21 @@ def test_setup_page_prepopulates_from_settings(qapp):
     assert page.live_radio.isChecked() is True  # live default
 
 
+def test_setup_page_prefills_username_from_logs(qapp, tmp_path):
+    (tmp_path / "pjk_-2026.6.30-10814-35390973-MSHMSHMSH.txt").write_text("x")
+    page = SetupPage(Settings())
+    page._prefill_username(str(tmp_path))
+    assert page.name_edit.text() == "pjk_"
+
+
+def test_setup_page_prefill_respects_typed_username(qapp, tmp_path):
+    (tmp_path / "pjk_-2026.6.30-10814-35390973-MSHMSHMSH.txt").write_text("x")
+    page = SetupPage(Settings())
+    page.name_edit.setText("Ann")
+    page._prefill_username(str(tmp_path))
+    assert page.name_edit.text() == "Ann"  # never clobbers what the user typed
+
+
 def test_start_gate_runs_wizard_only_when_unaccepted(qapp, tmp_path, monkeypatch):
     monkeypatch.setenv("MTGO_OVERLAY_HOME", str(tmp_path))
     import mtgo_overlay.app as app

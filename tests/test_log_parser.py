@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from mtgo_overlay.draft.log_parser import Log, get_current_log, is_valid_draft
+from mtgo_overlay.draft.log_parser import (
+    Log,
+    get_current_log,
+    infer_mtgo_username,
+    is_valid_draft,
+)
 
 HEADER = [
     "Event #:      123456789",
@@ -116,6 +121,24 @@ def test_get_current_log_picks_newest(tmp_path):
     os.utime(newer, (time.time() + 5, time.time() + 5))
 
     assert get_current_log(tmp_path, "TestUser") == str(newer)
+
+
+def test_infer_username_from_log_filenames(tmp_path):
+    (tmp_path / "pjk_-2026.6.30-10814-35390973-MSHMSHMSH.txt").write_text("x")
+    assert infer_mtgo_username(tmp_path) == "pjk_"
+
+
+def test_infer_username_prefers_most_common(tmp_path):
+    (tmp_path / "pjk_-2026.6.30-10814-35390973-MSHMSHMSH.txt").write_text("x")
+    (tmp_path / "pjk_-2026.6.29-10815-35390974-MSHMSHMSH.txt").write_text("x")
+    (tmp_path / "guest-2026.6.28-10816-35390975-MSHMSHMSH.txt").write_text("x")
+    assert infer_mtgo_username(tmp_path) == "pjk_"
+
+
+def test_infer_username_empty_when_no_logs(tmp_path):
+    (tmp_path / "notes.txt").write_text("x")  # doesn't match the log pattern
+    assert infer_mtgo_username(tmp_path) == ""
+    assert infer_mtgo_username(tmp_path / "missing") == ""
 
 
 def test_is_valid_draft(tmp_path):
