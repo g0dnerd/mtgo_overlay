@@ -1,10 +1,4 @@
-"""Parse MTGO draft logs into pack / pick state.
-
-This is a faithful port of the old ``crawler/logs.py`` — the parsing logic
-(``Log.check_for_update`` / ``Log.get_entry_point``) is intentionally unchanged,
-since the draft log remains the authoritative source of card names. Only the path
-helpers were cleaned up to ``pathlib`` so they work cross-platform for testing.
-"""
+"""Parse MTGO draft logs into pack / pick state."""
 
 from __future__ import annotations
 
@@ -43,7 +37,7 @@ class Log:
             log_warning("End of log file reached.")
             return "nothing"
         # Trim event/time/player header; start parsing from the last pick.
-        lines = lines[self.cutoff_idx:]
+        lines = lines[self.cutoff_idx :]
 
         pack_found = False
         pack: list[str] = []

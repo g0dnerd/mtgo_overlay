@@ -1,8 +1,7 @@
 """Watch the MTGO log folder and surface changes as Qt signals.
 
-Replaces the old ``root.after`` + nested-thread juggling: watchdog runs in its own
-thread and emits Qt signals which, delivered to slots living on the UI thread,
-marshal automatically via a queued connection.
+Watchdog runs in its own thread and emits Qt signals which,
+delivered to slots living on the UI thread, marshal automatically via a queued connection.
 """
 
 from __future__ import annotations
@@ -39,7 +38,9 @@ class DraftLogWatcher(QObject):
     draftStarted = Signal(str)
     logModified = Signal(str)
 
-    def __init__(self, log_dir: str | Path, username: str, parent: QObject | None = None):
+    def __init__(
+        self, log_dir: str | Path, username: str, parent: QObject | None = None
+    ):
         super().__init__(parent)
         self.log_dir = str(log_dir)
         self.username = username

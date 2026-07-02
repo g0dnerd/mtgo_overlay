@@ -64,11 +64,9 @@ jobs:
           body: |
             ## MTGO Draft Helper ${{ github.ref_name }}
 
-            **Install:** download `MtgoOverlaySetup.exe` below and run it. It installs
-            per-user (no admin prompt) and can optionally launch on sign-in.
+            **Install:** download `MtgoOverlaySetup.exe` below and run it. It installs per-user (no admin prompt) and can optionally launch on sign-in.
 
-            The installer is **unsigned**, so Windows SmartScreen will warn on first
-            run. Click **More info → Run anyway** to proceed.
+            The installer is **unsigned**, so Windows SmartScreen will warn on first run. Click **More info -> Run anyway** to proceed.
 
   # PRs touching the app -> build the exe only, to catch packaging breakage early.
   build-check:
