@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  pull_request:
+    paths:
+      - "src/**"
+      - "run.py"
+      - "build.ps1"
+      - "installer/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/release.yml"
+
+env:
+  UV_PROJECT_ENVIRONMENT: .venv-win
+
+jobs:
+  # Tag pushes -> build the exe, wrap it in the Inno Setup installer, publish a Release.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Read app version
+        id: ver
+        shell: pwsh
+        run: |
+          $m = Select-String -Path src\mtgo_overlay\__init__.py -Pattern '__version__\s*=\s*"([^"]+)"'
+          $version = $m.Matches[0].Groups[1].Value
+          $tag = "${{ github.ref_name }}".TrimStart('v')
+          if ($version -ne $tag) {
+            Write-Error "Tag v$tag does not match __version__ $version"
+            exit 1
+          }
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Build exe
+        shell: pwsh
+        run: .\build.ps1
+
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            /DAppVersion=${{ steps.ver.outputs.version }} `
+            installer\MtgoOverlay.iss
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/MtgoOverlaySetup.exe
+          body: |
+            ## MTGO Draft Helper ${{ github.ref_name }}
+
+            **Install:** download `MtgoOverlaySetup.exe` below and run it. It installs
+            per-user (no admin prompt) and can optionally launch on sign-in.
+
+            The installer is **unsigned**, so Windows SmartScreen will warn on first
+            run. Click **More info → Run anyway** to proceed.
+
+  # PRs touching the app -> build the exe only, to catch packaging breakage early.
+  build-check:
+    if: github.event_name == 'pull_request'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Build exe
+        shell: pwsh
+        run: .\build.ps1

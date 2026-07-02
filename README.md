@@ -97,9 +97,31 @@ Run these on Windows after `($env:UV_PROJECT_ENVIRONMENT=".venv-win"; uv sync --
 4. **Build:** `.\build.ps1` → `dist\MtgoOverlay.exe` runs from a clean path and
    writes config/cache/logs under `%APPDATA%`/`%LOCALAPPDATA%`.
 
+## Install
+
+Download `MtgoOverlaySetup.exe` from the
+[latest release](https://github.com/g0dnerd/mtgo_overlay/releases) and run it. It
+installs per-user (no admin prompt) into `%LOCALAPPDATA%\Programs\MtgoOverlay`,
+adds a Start-menu shortcut, and can optionally start on sign-in.
+
+Because the installer is **unsigned**, Windows SmartScreen shows a warning the
+first time you run it — click **More info → Run anyway**.
+
 ## Build
 
-`.\build.ps1` (PyInstaller one-file, no console, bundled `assets/`).
+`.\build.ps1` produces `dist\MtgoOverlay\` (PyInstaller `--onedir`, no console,
+bundled `assets/`). To wrap it in the installer locally, compile the Inno Setup
+script with the version from `__init__.py`:
+
+```powershell
+.\build.ps1
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=0.2.0 installer\MtgoOverlay.iss
+# -> dist\MtgoOverlaySetup.exe
+```
+
+Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`, which builds, compiles
+the installer, and publishes it to a GitHub Release automatically. The tag must
+match `__version__` in `src/mtgo_overlay/__init__.py`.
 
 ## Credits & attribution
 

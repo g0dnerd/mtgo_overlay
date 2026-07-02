@@ -1,6 +1,8 @@
 # Windows-side PyInstaller build. Run from the repo root in PowerShell.
 #   .\build.ps1
-# Produces dist\MtgoOverlay.exe (one file, no console).
+# Produces dist\MtgoOverlay\ (one folder, no console) with MtgoOverlay.exe inside.
+# --onedir over --onefile: faster cold start and no self-extract for AV to flag;
+# the Inno Setup installer ships the whole folder anyway.
 
 $ErrorActionPreference = "Stop"
 
@@ -9,15 +11,18 @@ $env:UV_PROJECT_ENVIRONMENT = ".venv-win"
 
 uv sync --extra dev
 
+# --collect-all PySide6 / --collect-submodules scipy: pull in every Qt plugin and
+# scipy compiled submodule so the exe doesn't crash on a friend's machine that
+# lacks the dev tree PyInstaller's static analysis silently relied on.
 uv run pyinstaller `
-    --onefile `
+    --onedir `
     --noconsole `
     --name MtgoOverlay `
     --icon assets/tray.ico `
     --add-data "assets;assets" `
-    --collect-submodules PySide6.QtSvg `
+    --collect-all PySide6 `
+    --collect-submodules scipy `
+    --noconfirm `
     run.py
 
-Write-Host "Built dist\MtgoOverlay.exe"
-# If a dependency is missing at runtime (e.g. a Qt plugin or scipy submodule),
-# add --collect-all PySide6  /  --collect-submodules scipy  and rebuild.
+Write-Host "Built dist\MtgoOverlay\MtgoOverlay.exe"
