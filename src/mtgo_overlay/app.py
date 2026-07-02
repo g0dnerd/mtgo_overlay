@@ -23,6 +23,7 @@ import logging
 import os
 import signal
 import sys
+import tempfile
 from datetime import date
 from pathlib import Path
 
@@ -49,7 +50,7 @@ from .recognition import scryfall_art
 from .recognition.config import RecognitionConfig
 from .recognition.pipeline import locate_cards
 from .recognition.types import CardLocation
-from .system import logging_setup, paths, win32
+from .system import logging_setup, paths, updater, win32
 from . import __version__
 
 _log = logging_setup.get_logger("app")
@@ -418,6 +419,48 @@ class _SupportedSetsWorker(QRunnable):
         self.signals.labelsReady.emit(filters)
 
 
+class _UpdateCheckWorker(QRunnable):
+    """Off-UI: ask GitHub for the latest release, emit a result dict."""
+
+    def __init__(self, on_done):
+        super().__init__()
+        self.signals = _WorkerSignals()
+        self.signals.labelsReady.connect(on_done)
+
+    def run(self) -> None:
+        try:
+            info = updater.fetch_latest_release()
+        except Exception as exc:  # noqa: BLE001 - worker boundary
+            _log.warning("Update check failed: %s", exc)
+            self.signals.labelsReady.emit({"ok": False, "error": str(exc)})
+            return
+        self.signals.labelsReady.emit({"ok": True, "info": info})
+
+
+class _UpdateDownloadWorker(QRunnable):
+    """Off-UI: download the installer for a release, emit its local path."""
+
+    def __init__(self, info, on_done):
+        super().__init__()
+        self.info = info
+        self.signals = _WorkerSignals()
+        self.signals.labelsReady.connect(on_done)
+
+    def run(self) -> None:
+        try:
+            fd, dest = tempfile.mkstemp(suffix="-" + self.info.asset_name)
+            os.close(fd)
+            _log.info("Downloading update %s to %s", self.info.tag, dest)
+            updater.download_installer(self.info.download_url, dest)
+        except Exception as exc:  # noqa: BLE001 - worker boundary
+            _log.warning("Update download failed: %s", exc)
+            self.signals.labelsReady.emit(
+                {"ok": False, "error": str(exc), "info": self.info}
+            )
+            return
+        self.signals.labelsReady.emit({"ok": True, "path": dest, "info": self.info})
+
+
 # --- controller -------------------------------------------------------------
 
 
@@ -463,6 +506,7 @@ class AppController(QObject):
         self._group_actions = None
         self._mtgo_present = False
         self._shutdown_done = False
+        self._update_quiet = False
 
     # --- lifecycle -----------------------------------------------------------
 
@@ -480,6 +524,7 @@ class AppController(QObject):
         self.pool.start(_SupportedSetsWorker(self._supported, self._on_supported_sets))
         self._restart_watcher()
         self._maybe_show_setup_toast()
+        self._check_for_updates(quiet=True)
 
     def _maybe_run_onboarding(self) -> None:
         if not needs_onboarding(self.settings):
@@ -905,6 +950,10 @@ class AppController(QObject):
         menu.addAction(clear_action)
 
         menu.addSeparator()
+        update_action = QAction("Check for updates…", menu)
+        update_action.triggered.connect(lambda: self._check_for_updates(quiet=False))
+        menu.addAction(update_action)
+
         about_action = QAction("About", menu)
         about_action.triggered.connect(self._show_about)
         menu.addAction(about_action)
@@ -1092,6 +1141,117 @@ class AppController(QObject):
             "&copy;Wizards of the Coast LLC."
         )
         box.exec()
+
+    # --- updates -------------------------------------------------------------
+
+    def _check_for_updates(self, quiet: bool = False) -> None:
+        """Dispatch a background release check. ``quiet`` (startup) surfaces only
+        when an update exists; the manual path reports every outcome."""
+        self._update_quiet = quiet
+        if not quiet:
+            _log.info("Checking for updates (current version %s)...", __version__)
+        self.pool.start(_UpdateCheckWorker(self._on_update_check))
+
+    def _open_releases(self) -> None:
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        QDesktopServices.openUrl(QUrl(updater.RELEASES_URL))
+
+    def _on_update_check(self, result: dict) -> None:
+        from PySide6.QtWidgets import QMessageBox
+
+        quiet = getattr(self, "_update_quiet", False)
+        if not result.get("ok"):
+            _log.warning("Update check error: %s", result.get("error"))
+            if not quiet:
+                QMessageBox.information(
+                    None,
+                    "Check for updates",
+                    "Could not check for updates. Please try again later.",
+                )
+            return
+
+        info = result.get("info")
+        if info is None or not updater.is_newer(info.version, __version__):
+            _log.info("No update available (current %s).", __version__)
+            if not quiet:
+                QMessageBox.information(
+                    None,
+                    "Check for updates",
+                    f"You're on the latest version (v{__version__}).",
+                )
+            return
+
+        _log.info("Update available: v%s (current v%s).", info.version, __version__)
+        if quiet:
+            if self._tray is not None:
+                self._tray.showMessage(
+                    "MTGO Draft Helper - update available",
+                    f"Version v{info.version} is available. Open the tray menu → "
+                    "'Check for updates…' to install.",
+                )
+            return
+
+        if not getattr(sys, "frozen", False):
+            # A dev checkout can't self-install; point at the release page instead.
+            box = QMessageBox()
+            box.setWindowTitle("Update available")
+            box.setText(
+                f"Version v{info.version} is available (you have v{__version__})."
+            )
+            box.setInformativeText("Open the release page to download it?")
+            box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            box.setDefaultButton(QMessageBox.Yes)
+            if box.exec() == QMessageBox.Yes:
+                self._open_releases()
+            return
+
+        box = QMessageBox()
+        box.setWindowTitle("Update available")
+        box.setText(
+            f"Version v{info.version} is available (you have v{__version__})."
+        )
+        notes = info.body.strip()
+        box.setInformativeText(
+            (notes + "\n\n" if notes else "")
+            + "Download and install it now? The app will close to finish the update."
+        )
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        box.setDefaultButton(QMessageBox.Yes)
+        if box.exec() != QMessageBox.Yes:
+            return
+        if self._tray is not None:
+            self._tray.showMessage("MTGO Draft Helper", "Downloading update…")
+        self.pool.start(_UpdateDownloadWorker(info, self._on_update_downloaded))
+
+    def _on_update_downloaded(self, result: dict) -> None:
+        from PySide6.QtWidgets import QMessageBox
+
+        if not result.get("ok"):
+            _log.warning("Update download error: %s", result.get("error"))
+            box = QMessageBox()
+            box.setWindowTitle("Update failed")
+            box.setText("The update could not be downloaded.")
+            box.setInformativeText("Open the release page to download it manually?")
+            box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            box.setDefaultButton(QMessageBox.Yes)
+            if box.exec() == QMessageBox.Yes:
+                self._open_releases()
+            return
+
+        QMessageBox.information(
+            None,
+            "Update downloaded",
+            "Update downloaded. The installer will open and the app will close.",
+        )
+        try:
+            updater.launch_installer(result["path"])
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("Could not launch installer: %s", exc)
+            self._open_releases()
+            return
+        self._exit()
 
     def _prompt_clear_data(self) -> None:
         from PySide6.QtWidgets import QMessageBox

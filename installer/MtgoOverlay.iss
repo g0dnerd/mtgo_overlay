@@ -38,6 +38,11 @@ OutputBaseFilename=MtgoOverlaySetup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+; In-place upgrade safety net: if the app is still running (e.g. it launched this
+; installer and is mid-exit), close it before overwriting its files, and don't
+; try to restart it - the user relaunches from the tray/Start menu.
+CloseApplications=yes
+RestartApplications=no
 ; The onedir bundle is 64-bit; only offer install on 64-bit Windows.
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
