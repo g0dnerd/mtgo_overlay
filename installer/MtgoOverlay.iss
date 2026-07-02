@@ -29,6 +29,10 @@ DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\{#AppExeName}
 UninstallDisplayName={#AppName}
+; Resolve [Files] Source and OutputDir from the repo root (parent of installer\),
+; not the script's own directory. Relative to the .iss file, so it holds for both
+; a local run and CI regardless of the working directory.
+SourceDir=..
 OutputDir=dist
 OutputBaseFilename=MtgoOverlaySetup
 Compression=lzma2
