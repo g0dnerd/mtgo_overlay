@@ -37,7 +37,9 @@ jobs:
           $m = Select-String -Path src\mtgo_overlay\__init__.py -Pattern '__version__\s*=\s*"([^"]+)"'
           $version = $m.Matches[0].Groups[1].Value
           $tag = "${{ github.ref_name }}".TrimStart('v')
-          if ($version -ne $tag) {
+          # Accept an exact match or a prerelease/test suffix (e.g. v0.2.0-rc1,
+          # v0.2.0-test) so throwaway CI tags work; still reject a real mismatch.
+          if ($tag -ne $version -and -not $tag.StartsWith("$version-")) {
             Write-Error "Tag v$tag does not match __version__ $version"
             exit 1
           }
