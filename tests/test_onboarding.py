@@ -7,6 +7,8 @@ than ``exec()``-ing a modal loop.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from mtgo_overlay.config.settings import Settings
@@ -26,7 +28,11 @@ def test_needs_onboarding_tracks_accepted_disclaimer():
 
 def test_likely_mtgo_log_dir_uses_appdata(monkeypatch):
     monkeypatch.setenv("APPDATA", "C:/Users/x/AppData/Roaming")
-    assert likely_mtgo_log_dir().endswith("Wizards of the Coast/Magic Online")
+    # str(Path(...)) uses the host separator, so compare on parts, not slashes.
+    assert Path(likely_mtgo_log_dir()).parts[-2:] == (
+        "Wizards of the Coast",
+        "Magic Online",
+    )
 
 
 def test_likely_mtgo_log_dir_empty_without_appdata(monkeypatch):
