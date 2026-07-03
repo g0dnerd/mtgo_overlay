@@ -21,7 +21,7 @@ from ..system.logging_setup import get_logger
 
 _log = get_logger("prices")
 
-TTL_SECONDS = 24 * 60 * 60
+TTL_SECONDS = 6 * 60 * 60
 
 
 @dataclass(frozen=True)
@@ -67,9 +67,7 @@ class PricesRepository:
             return False
         return (self._time() - fetched_at) < self.ttl_seconds
 
-    def _write_cache(
-        self, expansion: str, prices: dict[str, float | None]
-    ) -> Path:
+    def _write_cache(self, expansion: str, prices: dict[str, float | None]) -> Path:
         path = self._cache_path(expansion)
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
@@ -110,9 +108,7 @@ class PricesRepository:
 
     # --- lookup --------------------------------------------------------------
 
-    def lookup(
-        self, expansion: str, printing_ids: Sequence[str]
-    ) -> list[CardPrice]:
+    def lookup(self, expansion: str, printing_ids: Sequence[str]) -> list[CardPrice]:
         """Prices for ``printing_ids`` (order preserved). Unknown ids -> ``None``."""
         data = self._read_cache(expansion) or {}
         prices: dict[str, float | None] = data.get("prices", {})
