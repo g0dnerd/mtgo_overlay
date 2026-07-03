@@ -20,10 +20,10 @@ GetForeground = Callable[[], "int | None"]
 
 
 class WindowTracker(QObject):
-    moved = Signal(int, int, int, int)    # x, y, w, h — position changed only
+    moved = Signal(int, int, int, int)  # x, y, w, h — position changed only
     resized = Signal(int, int, int, int)  # x, y, w, h — size changed (re-recognize)
-    lost = Signal()                        # MTGO window disappeared
-    focusChanged = Signal(bool)            # MTGO gained / lost foreground focus
+    lost = Signal()  # MTGO window disappeared
+    focusChanged = Signal(bool)  # MTGO gained / lost foreground focus
 
     def __init__(
         self,

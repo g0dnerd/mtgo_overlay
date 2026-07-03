@@ -1,8 +1,3 @@
-"""Stdlib-logging setup plus the ``log_info``/``log_warning``/``log_exception``
-shims the old modules called. Ported modules keep their call sites; new code can
-use ``logging.getLogger(__name__)`` directly.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -17,7 +12,9 @@ _configured = False
 
 
 def _make_file_handler() -> logging.FileHandler:
-    handler = logging.FileHandler(paths.logs_dir() / "mtgo_overlay.log", encoding="utf-8")
+    handler = logging.FileHandler(
+        paths.logs_dir() / "mtgo_overlay.log", encoding="utf-8"
+    )
     handler.setFormatter(logging.Formatter(_FORMAT))
     return handler
 
@@ -82,6 +79,7 @@ def get_logger(name: str | None = None) -> logging.Logger:
 
 
 # --- module-level logging helpers -------------------------------------------
+
 
 def log_info(message: object) -> None:
     get_logger().info("%s", message)

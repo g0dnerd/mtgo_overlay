@@ -60,7 +60,9 @@ def make_grid():
                 tile = cv2.resize(tiles[k % len(tiles)], (tile_w, tile_h))
                 img[y : y + tile_h, x : x + tile_w] = tile
                 # Cards have black borders — that's the edge detection keys on.
-                cv2.rectangle(img, (x, y), (x + tile_w - 1, y + tile_h - 1), (0, 0, 0), 4)
+                cv2.rectangle(
+                    img, (x, y), (x + tile_w - 1, y + tile_h - 1), (0, 0, 0), 4
+                )
                 boxes.append((x, y, tile_w, tile_h))
                 tile_ids.append(k % len(tiles))
                 k += 1

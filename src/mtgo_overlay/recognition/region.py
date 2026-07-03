@@ -251,7 +251,10 @@ def _fill_rows_independently(
         if n_syn:
             _log.debug(
                 "Row %d: %d detected + %d synthesized -> %d columns.",
-                r_idx, len(row), n_syn, len(filled),
+                r_idx,
+                len(row),
+                n_syn,
+                len(filled),
             )
         for c_idx, (box, synthetic) in enumerate(filled):
             slots.append(Slot(bbox=box, row=r_idx, col=c_idx, synthetic=synthetic))
@@ -277,13 +280,20 @@ def detect_slots(
     band_boxes = [b for row in band for b in row]
     _log.debug(
         "Band split: %d row(s) detected -> kept top %d as pack (%d boxes).",
-        len(all_rows), len(band), len(band_boxes),
+        len(all_rows),
+        len(band),
+        len(band_boxes),
     )
 
     boxes = robust_size_filter(band_boxes, cfg.size_mad_factor, cfg.size_rel_tol)
     _log.debug(
         "Candidates on %dx%d: %d raw -> %d after NMS -> %d in pack band -> %d after size filter.",
-        w, h, len(raw), len(merged), len(band_boxes), len(boxes),
+        w,
+        h,
+        len(raw),
+        len(merged),
+        len(band_boxes),
+        len(boxes),
     )
     if not boxes:
         _log.warning("No card candidates found.")
@@ -294,14 +304,18 @@ def detect_slots(
     rows = cluster_rows(boxes, tol=cfg.row_tol_frac * median_h)
     _log.debug(
         "Median card %dx%d; %d row(s), detected columns per row: %s.",
-        median_w, median_h, len(rows), [len(r) for r in rows],
+        median_w,
+        median_h,
+        len(rows),
+        [len(r) for r in rows],
     )
 
     slots = reconstruct_grid(rows, median_w, median_h, expected_count)
     if slots is not None:
         _log.debug(
             "Lattice fit: %d slots (%d synthesized).",
-            len(slots), sum(s.synthetic for s in slots),
+            len(slots),
+            sum(s.synthetic for s in slots),
         )
     else:
         slots = _fill_rows_independently(rows, median_w, median_h)

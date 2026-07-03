@@ -93,18 +93,22 @@ def test_image_url_prefers_png_then_falls_back():
 
 def test_booster_artwork_ids_fetches_whole_set_once_and_caches(tmp_path, monkeypatch):
     pages = [
-        FakeResp({
-            "has_more": True,
-            "next_page": "http://api/next",
-            "data": [
-                {"id": "a1", "name": "X", "image_uris": {"png": "u1"}},
-                {"id": "y1", "name": "Y", "image_uris": {"png": "uy"}},
-            ],
-        }),
-        FakeResp({
-            "has_more": False,
-            "data": [{"id": "a2", "name": "X", "image_uris": {"png": "u2"}}],
-        }),
+        FakeResp(
+            {
+                "has_more": True,
+                "next_page": "http://api/next",
+                "data": [
+                    {"id": "a1", "name": "X", "image_uris": {"png": "u1"}},
+                    {"id": "y1", "name": "Y", "image_uris": {"png": "uy"}},
+                ],
+            }
+        ),
+        FakeResp(
+            {
+                "has_more": False,
+                "data": [{"id": "a2", "name": "X", "image_uris": {"png": "u2"}}],
+            }
+        ),
     ]
     calls = {"n": 0}
 
@@ -120,7 +124,9 @@ def test_booster_artwork_ids_fetches_whole_set_once_and_caches(tmp_path, monkeyp
     assert calls["n"] == 2  # one paginated set fetch, not one search per name
 
     # A different name from the same set is served from the same warmed index.
-    monkeypatch.setattr(scryfall_art, "_http_get", lambda *a, **k: pytest.fail("network"))
+    monkeypatch.setattr(
+        scryfall_art, "_http_get", lambda *a, **k: pytest.fail("network")
+    )
     assert scryfall_art.booster_artwork_ids("MSH", "Y", cache_dir=tmp_path) == [
         ArtRef("y1", "uy", "Y")
     ]
@@ -130,10 +136,14 @@ def test_booster_artwork_ids_fetches_whole_set_once_and_caches(tmp_path, monkeyp
 
 
 def test_booster_artwork_ids_matches_mdfc_front_face(tmp_path, monkeypatch):
-    page = FakeResp({
-        "has_more": False,
-        "data": [{"id": "p1", "name": "Front // Back", "image_uris": {"png": "uf"}}],
-    })
+    page = FakeResp(
+        {
+            "has_more": False,
+            "data": [
+                {"id": "p1", "name": "Front // Back", "image_uris": {"png": "uf"}}
+            ],
+        }
+    )
     monkeypatch.setattr(scryfall_art, "_http_get", lambda *a, **k: page)
     # MTGO's log may give only the front face; it must still resolve.
     assert scryfall_art.booster_artwork_ids("MSH", "Front", cache_dir=tmp_path) == [
@@ -143,21 +153,25 @@ def test_booster_artwork_ids_matches_mdfc_front_face(tmp_path, monkeypatch):
 
 def test_enumerate_set_cards_paginates_and_dedups(tmp_path, monkeypatch):
     pages = [
-        FakeResp({
-            "has_more": True,
-            "next_page": "http://api/next",
-            "data": [
-                {"id": "1", "name": "Alpha", "image_uris": {"png": "a"}},
-                {"id": "2", "name": "Beta", "image_uris": {"png": "b"}},
-            ],
-        }),
-        FakeResp({
-            "has_more": False,
-            "data": [
-                {"id": "3", "name": "Beta", "image_uris": {"png": "b2"}},
-                {"id": "4", "name": "Gamma", "image_uris": {"png": "g"}},
-            ],
-        }),
+        FakeResp(
+            {
+                "has_more": True,
+                "next_page": "http://api/next",
+                "data": [
+                    {"id": "1", "name": "Alpha", "image_uris": {"png": "a"}},
+                    {"id": "2", "name": "Beta", "image_uris": {"png": "b"}},
+                ],
+            }
+        ),
+        FakeResp(
+            {
+                "has_more": False,
+                "data": [
+                    {"id": "3", "name": "Beta", "image_uris": {"png": "b2"}},
+                    {"id": "4", "name": "Gamma", "image_uris": {"png": "g"}},
+                ],
+            }
+        ),
     ]
     calls = {"n": 0}
 
@@ -196,13 +210,17 @@ def test_fetch_artwork_cache_first(tmp_path, monkeypatch):
     ref = ArtRef("id9", "http://x/i.png", "N")
     cached = tmp_path / "id9.png"
     cached.write_bytes(b"already")
-    monkeypatch.setattr(scryfall_art, "_http_get", lambda *a, **k: pytest.fail("network"))
+    monkeypatch.setattr(
+        scryfall_art, "_http_get", lambda *a, **k: pytest.fail("network")
+    )
     assert scryfall_art.fetch_artwork(ref, tmp_path) == cached
 
 
 def test_fetch_artwork_downloads_and_caches(tmp_path, monkeypatch):
     ref = ArtRef("id7", "http://x/i.png", "N")
-    monkeypatch.setattr(scryfall_art, "_http_get", lambda *a, **k: FakeResp(content=b"PNG"))
+    monkeypatch.setattr(
+        scryfall_art, "_http_get", lambda *a, **k: FakeResp(content=b"PNG")
+    )
     out = scryfall_art.fetch_artwork(ref, tmp_path)
     assert out == tmp_path / "id7.png"
     assert out.read_bytes() == b"PNG"
@@ -210,21 +228,25 @@ def test_fetch_artwork_downloads_and_caches(tmp_path, monkeypatch):
 
 def test_fetch_set_tix_maps_printings_and_parses(monkeypatch):
     pages = [
-        FakeResp({
-            "has_more": True,
-            "next_page": "http://api/next",
-            "data": [
-                {"id": "a1", "name": "X", "prices": {"tix": "2.11"}},
-                {"id": "a2", "name": "X", "prices": {"tix": "0.75"}},
-            ],
-        }),
-        FakeResp({
-            "has_more": False,
-            "data": [
-                {"id": "a3", "name": "Y", "prices": {"tix": None}},
-                {"id": "a4", "name": "Z", "prices": {}},  # no tix key
-            ],
-        }),
+        FakeResp(
+            {
+                "has_more": True,
+                "next_page": "http://api/next",
+                "data": [
+                    {"id": "a1", "name": "X", "prices": {"tix": "2.11"}},
+                    {"id": "a2", "name": "X", "prices": {"tix": "0.75"}},
+                ],
+            }
+        ),
+        FakeResp(
+            {
+                "has_more": False,
+                "data": [
+                    {"id": "a3", "name": "Y", "prices": {"tix": None}},
+                    {"id": "a4", "name": "Z", "prices": {}},  # no tix key
+                ],
+            }
+        ),
     ]
     calls = {"n": 0}
 
@@ -259,7 +281,9 @@ def test_ensure_set_artwork_fetches_set_once_and_dedups(tmp_path, monkeypatch):
 
     monkeypatch.setattr(scryfall_art, "set_artwork_index", fake_index)
     monkeypatch.setattr(
-        scryfall_art, "fetch_artwork", lambda ref, cache_dir: fetched.append(ref.scryfall_id)
+        scryfall_art,
+        "fetch_artwork",
+        lambda ref, cache_dir: fetched.append(ref.scryfall_id),
     )
 
     scryfall_art.ensure_set_artwork("MSH", ["A", "B", "A"], cache_dir=tmp_path)

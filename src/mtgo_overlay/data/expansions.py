@@ -88,7 +88,9 @@ class SupportedSets:
                 )
                 return filters
             except SeventeenLandsError as exc:
-                _log.warning("17Lands filters fetch failed (%s); using cache if any.", exc)
+                _log.warning(
+                    "17Lands filters fetch failed (%s); using cache if any.", exc
+                )
         if cached:
             _log.info("Using cached 17Lands supported-set list.")
             return cached.get("filters", {})

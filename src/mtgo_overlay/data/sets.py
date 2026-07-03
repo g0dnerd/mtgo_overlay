@@ -30,9 +30,7 @@ def expansion_from_log_code(code: str) -> str:
     return _LOG_CODE_OVERRIDES.get(normalized, normalized.upper())
 
 
-BASIC_LANDS = frozenset(
-    {"Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"}
-)
+BASIC_LANDS = frozenset({"Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"})
 
 
 def is_basic_land(name: str) -> bool:

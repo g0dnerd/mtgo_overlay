@@ -108,7 +108,9 @@ def _http_get(url: str, params: dict | None = None) -> requests.Response:
             wait = _retry_after_seconds(resp)
             _log.warning(
                 "Scryfall 429 (attempt %d/%d); backing off %.0fs",
-                attempt + 1, MAX_RETRIES, wait,
+                attempt + 1,
+                MAX_RETRIES,
+                wait,
             )
             time.sleep(wait)
             continue
@@ -119,6 +121,7 @@ def _http_get(url: str, params: dict | None = None) -> requests.Response:
 
 
 # --- enumeration ------------------------------------------------------------
+
 
 def _image_url(card: dict) -> str | None:
     uris = card.get("image_uris") or {}
@@ -298,6 +301,7 @@ def booster_artwork_ids(
 
 
 # --- image fetch ------------------------------------------------------------
+
 
 def fetch_artwork(ref: ArtRef, cache_dir: Path) -> Path:
     """Cache-first download of ``ref``'s PNG; return the local path.

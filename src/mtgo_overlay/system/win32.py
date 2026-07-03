@@ -94,13 +94,11 @@ def set_click_through(hwnd: int) -> None:
 
     Deliberately does NOT call ``SetLayeredWindowAttributes(LWA_ALPHA)`` — that
     forces a uniform alpha and fights Qt's per-pixel ``WA_TranslucentBackground``
-    compositing (a bug the old tkinter overlay had). Qt owns the alpha.
+    compositing.
     """
     u = _user32()
     styles = u.GetWindowLongPtrW(hwnd, GWL_EXSTYLE)
-    styles |= (
-        WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW
-    )
+    styles |= WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW
     u.SetWindowLongPtrW(hwnd, GWL_EXSTYLE, styles)
 
 
@@ -108,8 +106,7 @@ def get_client_rect_on_screen(hwnd: int) -> tuple[int, int, int, int]:
     """Return MTGO's *client* area as ``(left, top, width, height)`` in screen px.
 
     Client (not window) origin means the overlay can be pinned to the inside of
-    the frame; recognition coords are then a pure ``capture_px`` mapping with no
-    title-bar fudge.
+    the frame; recognition coords are then a pure ``capture_px`` mapping.
     """
     u = _user32()
     rect = wintypes.RECT()

@@ -1,8 +1,7 @@
 """Prepare slot-sized grayscale (or gradient) templates from cached artwork.
 
 Depends only on the :mod:`scryfall_art` contract (it consumes ``Path``s), so the
-path->template preparation is unit-testable with fixture PNGs while the real
-Scryfall integration is still a stub. Prepared templates are memoized.
+path->template preparation is unit-testable with fixture PNGs.
 """
 
 from __future__ import annotations
@@ -17,7 +16,9 @@ from ..system import paths
 from . import scryfall_art
 
 
-def prepare(image: np.ndarray, size: tuple[int, int], *, mode: str = "gray") -> np.ndarray:
+def prepare(
+    image: np.ndarray, size: tuple[int, int], *, mode: str = "gray"
+) -> np.ndarray:
     """Grayscale + resize an image to ``size`` (canonical slot size).
 
     ``mode="gradient"`` returns a normalized Sobel magnitude instead of raw
@@ -47,9 +48,7 @@ def templates_from_paths(
     image_paths: tuple[Path, ...], size: tuple[int, int], *, mode: str = "gray"
 ) -> tuple[np.ndarray, ...]:
     """Load + prepare a set of artwork images into canonical-size templates."""
-    return tuple(
-        prepare(load_template_image(p), size, mode=mode) for p in image_paths
-    )
+    return tuple(prepare(load_template_image(p), size, mode=mode) for p in image_paths)
 
 
 @lru_cache(maxsize=4096)
@@ -62,11 +61,7 @@ def reference_templates(
     mode: str = "gray",
 ) -> tuple[np.ndarray, ...]:
     """All prepared templates for ``name`` in ``expansion`` (memoized).
-
-    Enumerates booster-eligible artworks via the (owner-implemented) Scryfall
-    stub and prepares each cached image. Until the stub is implemented this
-    raises ``NotImplementedError`` from :mod:`scryfall_art`; recognition tests
-    inject templates directly via :func:`templates_from_paths` instead.
+    Enumerates booster-eligible artworks and prepares each cached image.
     """
     cache_dir = cache_dir or paths.scryfall_cache_dir()
     refs = scryfall_art.booster_artwork_ids(expansion, name, cache_dir=cache_dir)

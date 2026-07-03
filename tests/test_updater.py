@@ -21,6 +21,7 @@ from mtgo_overlay.system.updater import (
 
 # --- version math ----------------------------------------------------------
 
+
 def test_parse_version_strips_v_and_suffix():
     assert parse_version("v1.2.3") == (1, 2, 3)
     assert parse_version("1.2.3") == (1, 2, 3)
@@ -45,6 +46,7 @@ def test_is_newer():
 
 
 # --- release fetch / asset selection --------------------------------------
+
 
 class _FakeResponse:
     def __init__(self, payload, status_ok=True):
@@ -104,7 +106,10 @@ def test_fetch_latest_falls_back_to_first_exe():
     payload = _release_payload(
         [
             {"name": "notes.txt", "browser_download_url": "https://x/notes.txt"},
-            {"name": "Installer.exe", "browser_download_url": "https://x/Installer.exe"},
+            {
+                "name": "Installer.exe",
+                "browser_download_url": "https://x/Installer.exe",
+            },
         ]
     )
     info = fetch_latest_release(session=_FakeSession(_FakeResponse(payload)))
@@ -125,11 +130,18 @@ def test_fetch_latest_none_on_http_error():
 
 
 def test_fetch_latest_none_on_malformed_json():
-    assert fetch_latest_release(session=_FakeSession(_FakeResponse(["not", "a", "dict"]))) is None
-    assert fetch_latest_release(session=_FakeSession(_FakeResponse({"assets": []}))) is None
+    assert (
+        fetch_latest_release(session=_FakeSession(_FakeResponse(["not", "a", "dict"])))
+        is None
+    )
+    assert (
+        fetch_latest_release(session=_FakeSession(_FakeResponse({"assets": []})))
+        is None
+    )
 
 
 # --- live (opt-in) ---------------------------------------------------------
+
 
 @pytest.mark.skipif(
     not os.environ.get("MTGO_OVERLAY_LIVE_GITHUB"),

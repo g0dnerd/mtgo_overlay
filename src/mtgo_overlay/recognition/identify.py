@@ -3,7 +3,7 @@
 The closed, known name set + a regular grid turns "does this ROI match card X
 above some threshold?" into an assignment problem: build a score matrix
 ``S[slot, name]`` and solve for the best global 1-to-1 mapping. Acceptance is
-*relative* (the best mutual match wins), so there are no absolute thresholds —
+*relative* (the best mutual match wins), so there are no absolute thresholds,
 only an optional soft floor to drop near-random slots.
 """
 

@@ -55,19 +55,29 @@ def locate_cards(
     ]
 
     if templates_provider is None:
+
         def templates_provider(name: str):  # noqa: E306 - local default
             return reference.reference_templates(
-                expansion, name, cfg.template_size, cache_dir=cache_dir, mode=cfg.prep_mode
+                expansion,
+                name,
+                cfg.template_size,
+                cache_dir=cache_dir,
+                mode=cfg.prep_mode,
             )
 
     if ids_provider is None:
+
         def ids_provider(name: str):  # noqa: E306 - local default
             # Same order as the default templates (both from booster_artwork_ids),
             # so best_tpl indexes straight into this id list.
-            refs = scryfall_art.booster_artwork_ids(expansion, name, cache_dir=cache_dir)
+            refs = scryfall_art.booster_artwork_ids(
+                expansion, name, cache_dir=cache_dir
+            )
             return [r.scryfall_id for r in refs]
 
-    scores, best_tpl = identify.build_score_matrix(slot_images, names, templates_provider)
+    scores, best_tpl = identify.build_score_matrix(
+        slot_images, names, templates_provider
+    )
     pairs = identify.assign(scores, min_affinity=cfg.min_affinity)
     if _log.isEnabledFor(logging.DEBUG):
         _log_confidence(slots, names, scores, pairs)
@@ -116,7 +126,11 @@ def _log_confidence(
             name, score = assigned[i]
             _log.debug(
                 "  slot r%dc%d -> %-28s score=%.3f (best match %s)",
-                slot.row, slot.col, name, score, best,
+                slot.row,
+                slot.col,
+                name,
+                score,
+                best,
             )
         else:
             _log.debug(
@@ -129,6 +143,5 @@ def get_pos_and_names(
 ) -> dict[str, tuple[int, int, int, int]]:
     """Compatibility shim matching the old ``rec.get_pos_and_names`` contract."""
     return {
-        loc.name: loc.bbox.as_tuple()
-        for loc in locate_cards(screen, names, expansion)
+        loc.name: loc.bbox.as_tuple() for loc in locate_cards(screen, names, expansion)
     }

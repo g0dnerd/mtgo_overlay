@@ -185,7 +185,9 @@ PRICE_CITATION = "Prices: Scryfall"
 
 
 class OverlayWindow(QWidget):
-    def __init__(self, style: OverlayStyle | None = None, parent: QWidget | None = None):
+    def __init__(
+        self, style: OverlayStyle | None = None, parent: QWidget | None = None
+    ):
         super().__init__(parent)
         self.style = style or OverlayStyle()
         self._labels: list[LabelSpec] = []
@@ -247,7 +249,9 @@ class OverlayWindow(QWidget):
         return font_for(self.style, card_h)
 
     def _compute_rect(self, spec: LabelSpec) -> QRectF:
-        return compute_label_rect(spec, self.style, QFontMetrics(self._font_for(spec.h)))
+        return compute_label_rect(
+            spec, self.style, QFontMetrics(self._font_for(spec.h))
+        )
 
     def _compute_price_rect(self, spec: LabelSpec) -> QRectF:
         fm = QFontMetrics(price_font_for(self.style, spec.h))

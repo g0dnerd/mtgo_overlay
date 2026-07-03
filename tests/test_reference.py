@@ -35,7 +35,9 @@ def test_load_missing_raises(tmp_path):
         reference.load_template_image(tmp_path / "nope.png")
 
 
-def test_reference_templates_uses_scryfall_contract(fixtures_dir, tmp_path, monkeypatch):
+def test_reference_templates_uses_scryfall_contract(
+    fixtures_dir, tmp_path, monkeypatch
+):
     # Wire the consumer to the Scryfall layer without any network: stub the
     # enumeration + fetch to point at a fixture PNG.
     from mtgo_overlay.recognition import scryfall_art

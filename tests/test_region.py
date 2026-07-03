@@ -14,6 +14,7 @@ from conftest import discover_screenshot_fixtures
 
 # --- pure geometry helpers (no image needed) -------------------------------
 
+
 def test_robust_size_filter_drops_outliers():
     boxes = [BBox(0, 0, 100, 140) for _ in range(6)]
     boxes.append(BBox(0, 0, 400, 560))  # ~16x area outlier
@@ -75,7 +76,7 @@ def test_select_pack_band_drops_pool_below_wide_gap():
 def test_select_pack_band_threshold_pins_band_gap_frac():
     pack = [BBox(0, 0, 70, 100)]
     near = [BBox(0, 114, 70, 100)]  # edge gap 0.14 x h -> kept
-    far = [BBox(0, 116, 70, 100)]   # edge gap 0.16 x h -> dropped
+    far = [BBox(0, 116, 70, 100)]  # edge gap 0.16 x h -> dropped
     assert region.select_pack_band([pack, near], 100, 0.15) == [pack, near]
     assert region.select_pack_band([pack, far], 100, 0.15) == [pack]
 
@@ -97,6 +98,7 @@ def test_fill_row_gaps_single_box_noop():
 
 
 # --- lattice reconstruction (uses the known count to recover row-end cards) --
+
 
 def test_reconstruct_grid_extends_short_last_row():
     # The live [8,2] failure: top row fully detected (8), bottom row only the two
@@ -135,6 +137,7 @@ def test_reconstruct_grid_bails_on_inconsistent_count():
 
 # --- pixel stage on a synthetic grid (controlled, deterministic) -----------
 
+
 def test_detect_slots_on_synthetic_grid(make_grid, distinct_tiles):
     img, boxes, _ = make_grid(distinct_tiles, rows=3, cols=5)
     slots = region.detect_slots(img, RecognitionConfig(), expected_count=15)
@@ -172,9 +175,10 @@ def test_detect_slots_on_real_screenshot(png, gt_path):
 # the bottom row renders a pixel taller and the MAD collapses to 0).
 
 _PACK_ONLY_FIXTURES = [
-    p for p in _FIXTURES if p[0].name in {
-        "with_drafted.png", "with_drafted_pick_3.png", "p1p1_empty_pool.png"
-    }
+    p
+    for p in _FIXTURES
+    if p[0].name
+    in {"with_drafted.png", "with_drafted_pick_3.png", "p1p1_empty_pool.png"}
 ]
 
 

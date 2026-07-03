@@ -51,21 +51,28 @@ def write(tmp_path, text):
 
 
 def test_entry_point_lands_on_current_pack(tmp_path):
-    text = build_log([
-        (1, PACK1, "Fanged Flames"),
-        (2, PACK2, "Refurbished Familiar"),
-        (3, PACK3, None),  # current, unpicked
-    ])
+    text = build_log(
+        [
+            (1, PACK1, "Fanged Flames"),
+            (2, PACK2, "Refurbished Familiar"),
+            (3, PACK3, None),  # current, unpicked
+        ]
+    )
     log = Log(write(tmp_path, text))
     assert log.picks == ["Fanged Flames", "Refurbished Familiar"]
     assert log.current_pack == PACK3
 
 
 def test_pick_then_new_then_nothing(tmp_path):
-    path = write(tmp_path, build_log([
-        (1, PACK1, "Fanged Flames"),
-        (2, PACK2, None),  # current, unpicked
-    ]))
+    path = write(
+        tmp_path,
+        build_log(
+            [
+                (1, PACK1, "Fanged Flames"),
+                (2, PACK2, None),  # current, unpicked
+            ]
+        ),
+    )
     log = Log(path)
     assert log.picks == ["Fanged Flames"]
     assert log.current_pack == PACK2
@@ -74,11 +81,16 @@ def test_pick_then_new_then_nothing(tmp_path):
     assert log.check_for_update() == "nothing"
 
     # User picks from pack 2 and pack 3 appears.
-    path.write_text(build_log([
-        (1, PACK1, "Fanged Flames"),
-        (2, PACK2, "Refurbished Familiar"),
-        (3, PACK3, None),
-    ]), encoding="utf-8")
+    path.write_text(
+        build_log(
+            [
+                (1, PACK1, "Fanged Flames"),
+                (2, PACK2, "Refurbished Familiar"),
+                (3, PACK3, None),
+            ]
+        ),
+        encoding="utf-8",
+    )
     assert log.check_for_update() == "picked"
     assert log.picks == ["Fanged Flames", "Refurbished Familiar"]
     assert log.check_for_update() == "new"

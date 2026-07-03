@@ -11,13 +11,11 @@ $env:UV_PROJECT_ENVIRONMENT = ".venv-win"
 
 uv sync --extra dev
 
-# We let PyInstaller's PySide6 hook bundle only the Qt modules actually imported
+# Let PyInstaller's PySide6 hook bundle only the Qt modules actually imported
 # (QtCore/QtGui/QtWidgets) rather than --collect-all PySide6, which drags in the
-# whole ~650 MB Qt tree (QtWebEngine alone is ~200 MB). QtSvg is collected
-# explicitly because the tray icon needs its imageformat plugin, and scipy's
+# whole ~650 MB Qt tree. QtSvg is collected explicitly
+# because the tray icon needs its imageformat plugin, and scipy's
 # compiled submodules are collected because we import scipy.optimize dynamically.
-# The excludes below are belt-and-suspenders against heavy unused Qt modules and
-# dev-only deps (pytest/pygments) leaking in from the `dev` extra.
 uv run pyinstaller `
     --onedir `
     --noconsole `

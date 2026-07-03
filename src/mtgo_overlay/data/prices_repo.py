@@ -83,7 +83,7 @@ class PricesRepository:
     # --- acquisition ---------------------------------------------------------
 
     def ensure(self, expansion: str) -> Path:
-        """Make sure a <=24h-old price cache for ``expansion`` exists.
+        """Make sure a <=6h-old price cache for ``expansion`` exists.
 
         A fresh cache is kept; otherwise prices are refetched from Scryfall. On a
         fetch failure a stale cache is retained rather than discarded.

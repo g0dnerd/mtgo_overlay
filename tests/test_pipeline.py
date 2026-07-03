@@ -31,7 +31,12 @@ def test_locate_cards_wiring(make_grid, distinct_tiles):
         return [reference.prepare(tile, cfg.template_size, mode=cfg.prep_mode)]
 
     located = pipeline.locate_cards(
-        img, names, "TST", cfg, detect=fake_detect, templates_provider=templates_provider
+        img,
+        names,
+        "TST",
+        cfg,
+        detect=fake_detect,
+        templates_provider=templates_provider,
     )
 
     assert len(located) == len(boxes)

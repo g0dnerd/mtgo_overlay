@@ -1,10 +1,10 @@
 """First-run onboarding wizard: a privacy/affiliation consent gate followed by
-the minimal setup a friend needs (log folder, MTGO username) plus the one
+the minimal setup a user needs (log folder, MTGO username) plus the one
 invisible prerequisite (enabling draft logging inside MTGO).
 
-The privacy page is the consent gate (it commits ``accepted_disclaimer``); the
-setup page is where the user actually chooses their win-rate data source - live
-17Lands or their own CSV export - so ``use_live_17lands`` reflects a deliberate
+The privacy page is a consent gate (it commits ``accepted_disclaimer``).
+The setup page is where the user actually chooses their win-rate data source
+(live 17Lands or their own CSV export) so ``use_live_17lands`` reflects a deliberate
 pick rather than a side effect of accepting the notice. Each page commits its
 result to :class:`Settings` and ``save()``s on completion, so a half-finished
 wizard keeps its progress and never re-shows the already-accepted disclaimer (the

@@ -92,9 +92,7 @@ def identification_accuracy(
     return correct / len(truth.cards)
 
 
-def mean_center_error(
-    located: list[CardLocation], truth: GroundTruth
-) -> float | None:
+def mean_center_error(located: list[CardLocation], truth: GroundTruth) -> float | None:
     """Mean Euclidean px error between located and ground-truth box centers."""
     remaining = list(truth.cards)
     errors: list[float] = []

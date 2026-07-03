@@ -50,11 +50,11 @@ def test_ensure_uses_fresh_cache_without_refetch(tmp_path):
     repo = _repo(tmp_path, client=fetcher, time_fn=lambda: clock["t"])
     repo.ensure("stx")
 
-    clock["t"] += 23 * 3600  # still inside the 24h TTL
+    clock["t"] += 5 * 3600  # still inside the 6h TTL
     repo.ensure("stx")
     assert fetcher.calls == ["stx"]  # served from cache, no second fetch
 
-    clock["t"] += 2 * 3600  # now 25h old -> stale
+    clock["t"] += 2 * 3600  # now 7h old -> stale
     repo.ensure("stx")
     assert fetcher.calls == ["stx", "stx"]
 
@@ -64,7 +64,7 @@ def test_is_fresh_tracks_ttl(tmp_path):
     repo = _repo(tmp_path, client=_StubFetcher({"a1": 1.0}), time_fn=lambda: clock["t"])
     repo.ensure("stx")
     assert repo.is_fresh("stx")
-    clock["t"] += 25 * 3600
+    clock["t"] += 7 * 3600
     assert not repo.is_fresh("stx")
 
 

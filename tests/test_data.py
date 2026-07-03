@@ -21,6 +21,7 @@ from mtgo_overlay.data.sets import expansion_from_log_code, is_basic_land
 
 # --- sets ------------------------------------------------------------------
 
+
 def test_expansion_from_log_code():
     assert expansion_from_log_code("mh3") == "MH3"
     assert expansion_from_log_code(" Blb ") == "BLB"
@@ -33,6 +34,7 @@ def test_is_basic_land():
 
 # --- CSV parsing -----------------------------------------------------------
 
+
 def test_parse_csv(fixtures_dir):
     ratings = parse_17lands_csv(fixtures_dir / "ratings" / "sample_card_ratings.csv")
     assert ratings["The Super Hero Civil War"] == 75.7
@@ -42,6 +44,7 @@ def test_parse_csv(fixtures_dir):
 
 
 # --- 17Lands client --------------------------------------------------------
+
 
 def test_gih_win_rate_mapping(fixtures_dir):
     data = json.loads((fixtures_dir / "ratings" / "sample_17lands.json").read_text())
@@ -127,6 +130,7 @@ def test_client_fetch_filters_rejects_non_object():
 
 
 # --- repository ------------------------------------------------------------
+
 
 class _StubClient:
     """Minimal stand-in matching what RatingsRepository calls."""
@@ -268,8 +272,11 @@ def test_repo_live_no_start_date_omits_window(tmp_path, fixtures_dir):
 def test_repo_keeps_stale_when_refresh_fails(tmp_path, fixtures_dir):
     clock = {"t": 1000.0}
     csv = fixtures_dir / "ratings" / "sample_card_ratings.csv"
-    repo = _repo(tmp_path, client=_StubClient(error=SeventeenLandsError("offline")),
-                 time_fn=lambda: clock["t"])
+    repo = _repo(
+        tmp_path,
+        client=_StubClient(error=SeventeenLandsError("offline")),
+        time_fn=lambda: clock["t"],
+    )
     repo.ensure("mh3", "PremierDraft", use_live=False, csv_path=csv)  # seed cache
     clock["t"] += 100 * 3600  # go stale
 
@@ -296,7 +303,10 @@ def test_repo_reimports_when_csv_path_changes(tmp_path, fixtures_dir):
     csv_b.write_text("Name,GIH WR\nAgent Phil Coulson,99.9%\n", encoding="utf-8")
     repo.ensure("mh3", "PremierDraft", use_live=False, csv_path=csv_b)
 
-    out = {r.name: r.gih_wr for r in repo.lookup("mh3", "PremierDraft", ["Agent Phil Coulson"])}
+    out = {
+        r.name: r.gih_wr
+        for r in repo.lookup("mh3", "PremierDraft", ["Agent Phil Coulson"])
+    }
     assert out["Agent Phil Coulson"] == 99.9
 
 
@@ -336,9 +346,7 @@ def test_live_17lands_current_set_has_ratings(tmp_path):
     client = SeventeenLandsClient(Settings().user_agent)
     filters = client.fetch_filters()
     live = filters.get("live_formats_by_expansion", {})
-    premier = next(
-        (exp for exp, fmts in live.items() if "PremierDraft" in fmts), None
-    )
+    premier = next((exp for exp, fmts in live.items() if "PremierDraft" in fmts), None)
     assert premier, f"no premier-live set in {list(live)}"
     fmt = format_for(premier, "PremierDraft", filters)
     start = filters["start_dates"][premier][:10]

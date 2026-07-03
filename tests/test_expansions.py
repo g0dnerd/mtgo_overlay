@@ -41,6 +41,7 @@ class _StubClient:
 
 # --- pure helpers ----------------------------------------------------------
 
+
 def test_codes_newest_first_orders_by_start_date():
     assert codes_newest_first(SAMPLE_FILTERS) == ["NEW", "MID", "OLD"]
 
@@ -109,6 +110,7 @@ def test_format_for_unknown_set_defaults_to_premier():
 
 # --- cache behavior --------------------------------------------------------
 
+
 def test_ensure_caches_and_serves_within_ttl(tmp_path):
     clock = {"t": 1000.0}
     client = _StubClient(filters=SAMPLE_FILTERS)
@@ -140,13 +142,17 @@ def test_ensure_error_no_cache_returns_empty(tmp_path):
 def test_ensure_error_serves_stale_cache(tmp_path):
     clock = {"t": 1000.0}
     SupportedSets(
-        _StubClient(filters=SAMPLE_FILTERS), tmp_path,
-        ttl_seconds=100, time_fn=lambda: clock["t"],
+        _StubClient(filters=SAMPLE_FILTERS),
+        tmp_path,
+        ttl_seconds=100,
+        time_fn=lambda: clock["t"],
     ).ensure()  # seed cache
 
     clock["t"] += 1000  # cache now stale
     offline = SupportedSets(
-        _StubClient(error=SeventeenLandsError("offline")), tmp_path,
-        ttl_seconds=100, time_fn=lambda: clock["t"],
+        _StubClient(error=SeventeenLandsError("offline")),
+        tmp_path,
+        ttl_seconds=100,
+        time_fn=lambda: clock["t"],
     )
     assert offline.ensure() == SAMPLE_FILTERS
