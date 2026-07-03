@@ -28,17 +28,25 @@ def build_score_matrix(
     slot_images: Sequence[np.ndarray],
     names: Sequence[str],
     get_templates: TemplateProvider,
-) -> np.ndarray:
-    """``S[i, j]`` = best match of slot ``i`` against any artwork of name ``j``."""
+) -> tuple[np.ndarray, np.ndarray]:
+    """Score every slot against every name's artworks.
+
+    Returns ``(scores, best_tpl)``: ``scores[i, j]`` is slot ``i``'s best match
+    against any artwork of name ``j``, and ``best_tpl[i, j]`` is the index of the
+    winning template (``-1`` when name ``j`` has no templates), so callers can
+    recover *which* printing matched.
+    """
     template_cache = {name: list(get_templates(name)) for name in names}
     scores = np.full((len(slot_images), len(names)), -1.0, dtype=np.float32)
+    best_tpl = np.full((len(slot_images), len(names)), -1, dtype=np.int32)
     for i, slot in enumerate(slot_images):
         for j, name in enumerate(names):
-            best = -1.0
-            for template in template_cache[name]:
-                best = max(best, match_score(slot, template))
-            scores[i, j] = best
-    return scores
+            for t, template in enumerate(template_cache[name]):
+                s = match_score(slot, template)
+                if s > scores[i, j]:
+                    scores[i, j] = s
+                    best_tpl[i, j] = t
+    return scores, best_tpl
 
 
 def assign(

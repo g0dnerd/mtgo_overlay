@@ -208,6 +208,47 @@ def test_fetch_artwork_downloads_and_caches(tmp_path, monkeypatch):
     assert out.read_bytes() == b"PNG"
 
 
+def test_fetch_set_tix_maps_printings_and_parses(monkeypatch):
+    pages = [
+        FakeResp({
+            "has_more": True,
+            "next_page": "http://api/next",
+            "data": [
+                {"id": "a1", "name": "X", "prices": {"tix": "2.11"}},
+                {"id": "a2", "name": "X", "prices": {"tix": "0.75"}},
+            ],
+        }),
+        FakeResp({
+            "has_more": False,
+            "data": [
+                {"id": "a3", "name": "Y", "prices": {"tix": None}},
+                {"id": "a4", "name": "Z", "prices": {}},  # no tix key
+            ],
+        }),
+    ]
+    calls = {"n": 0}
+
+    def fake_get(url, params=None):
+        resp = pages[calls["n"]]
+        calls["n"] += 1
+        return resp
+
+    monkeypatch.setattr(scryfall_art, "_http_get", fake_get)
+    tix = scryfall_art.fetch_set_tix("STX")
+    assert tix == {"a1": 2.11, "a2": 0.75, "a3": None, "a4": None}
+    assert calls["n"] == 2  # one paginated set search, shared with the art index
+
+
+def test_fetch_set_tix_unknown_set_returns_empty(monkeypatch):
+    def fake_get(url, params=None):
+        resp = requests.Response()
+        resp.status_code = 404
+        raise requests.HTTPError(response=resp)
+
+    monkeypatch.setattr(scryfall_art, "_http_get", fake_get)
+    assert scryfall_art.fetch_set_tix("ZZZ") == {}
+
+
 def test_ensure_set_artwork_fetches_set_once_and_dedups(tmp_path, monkeypatch):
     index_calls: list[str] = []
     fetched: list[str] = []

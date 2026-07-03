@@ -8,6 +8,7 @@ from mtgo_overlay.app import (
     expansion_from_log_path,
     map_capture_to_logical,
 )
+from mtgo_overlay.data.prices_repo import CardPrice
 from mtgo_overlay.data.ratings_repo import CardRating
 from mtgo_overlay.recognition.types import BBox, CardLocation
 
@@ -53,6 +54,44 @@ def test_build_label_specs_colors_by_set_percentile():
     assert by_wr[48.0] < 0.15            # bottom of the set -> near 0 (red)
     assert by_wr[64.0] > 0.80            # top of the set -> near 1 (green)
     assert by_wr[None] is None           # unrated -> no tier (neutral pill)
+
+
+def test_build_label_specs_joins_prices_by_printing_id_over_threshold():
+    located = [
+        CardLocation("Bomb", BBox(0, 0, 100, 140), 0.9, printing_id="p-bomb"),
+        CardLocation("Chaff", BBox(100, 0, 100, 140), 0.9, printing_id="p-chaff"),
+    ]
+    ratings = [CardRating("Bomb", 60.0), CardRating("Chaff", 50.0)]
+    prices = [CardPrice("p-bomb", 2.5), CardPrice("p-chaff", 0.3)]  # chaff < 1.0
+    specs = build_label_specs(
+        located, ratings, dpr=1.0, prices=prices,
+        show_prices=True, price_min_tix=1.0,
+    )
+    by_wr = {s.gih_wr: s.tix for s in specs}
+    assert by_wr[60.0] == 2.5    # priced: at/above threshold
+    assert by_wr[50.0] is None   # below the 1.0 tix threshold -> no price pill
+
+
+def test_build_label_specs_prices_off_leaves_tix_none():
+    located = [CardLocation("Bomb", BBox(0, 0, 100, 140), 0.9, printing_id="p-bomb")]
+    ratings = [CardRating("Bomb", 60.0)]
+    prices = [CardPrice("p-bomb", 5.0)]
+    specs = build_label_specs(
+        located, ratings, dpr=1.0, prices=prices,
+        show_prices=False, price_min_tix=1.0,
+    )
+    assert specs[0].tix is None  # toggle off -> never priced, even above threshold
+
+
+def test_build_label_specs_null_tix_printing_shows_no_price():
+    located = [CardLocation("Bomb", BBox(0, 0, 100, 140), 0.9, printing_id="p-bomb")]
+    ratings = [CardRating("Bomb", 60.0)]
+    prices = [CardPrice("p-bomb", None)]  # this printing has no tix
+    specs = build_label_specs(
+        located, ratings, dpr=1.0, prices=prices,
+        show_prices=True, price_min_tix=1.0,
+    )
+    assert specs[0].tix is None
 
 
 def test_build_label_specs_scales_with_dpr():

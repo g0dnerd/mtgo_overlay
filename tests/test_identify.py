@@ -28,7 +28,7 @@ def test_assignment_recovers_permutation():
     perm = list(rng.permutation(k))
     slot_images = [patterns[p] for p in perm]
 
-    scores = identify.build_score_matrix(
+    scores, best_tpl = identify.build_score_matrix(
         slot_images, names, lambda name: templates[name]
     )
     pairs = identify.assign(scores)
@@ -36,6 +36,31 @@ def test_assignment_recovers_permutation():
     recovered = {slot_i: name_j for slot_i, name_j, _ in pairs}
     for slot_i, original in enumerate(perm):
         assert recovered[slot_i] == original  # name index == pattern it holds
+    # Single template per name -> the winning template index is always 0.
+    for slot_i, name_j, _ in pairs:
+        assert best_tpl[slot_i, name_j] == 0
+
+
+def test_build_score_matrix_reports_winning_template():
+    rng = np.random.default_rng(7)
+    slot = rng.integers(0, 256, size=(140, 100), dtype=np.uint8)
+    decoy = rng.integers(0, 256, size=(140, 100), dtype=np.uint8)
+    # Name "card" has two artworks; the slot is a pixel-exact copy of the 2nd.
+    templates = {"card": [decoy, slot]}
+
+    scores, best_tpl = identify.build_score_matrix(
+        [slot], ["card"], lambda name: templates[name]
+    )
+    assert best_tpl[0, 0] == 1  # the matching printing, not the decoy
+    assert scores[0, 0] > 0.999
+
+
+def test_build_score_matrix_no_templates_sentinel():
+    rng = np.random.default_rng(1)
+    slot = rng.integers(0, 256, size=(140, 100), dtype=np.uint8)
+    scores, best_tpl = identify.build_score_matrix([slot], ["card"], lambda name: [])
+    assert best_tpl[0, 0] == -1  # no artwork -> sentinel, not a bogus index
+    assert scores[0, 0] == -1.0
 
 
 def test_min_affinity_drops_low_scores():

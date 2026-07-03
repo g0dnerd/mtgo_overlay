@@ -15,7 +15,7 @@ from typing import Callable, Sequence
 import numpy as np
 
 from ..system.logging_setup import get_logger
-from . import identify, reference, region
+from . import identify, reference, region, scryfall_art
 from .config import RecognitionConfig
 from .types import BBox, CardLocation, Slot
 
@@ -23,6 +23,7 @@ _log = get_logger("recognition")
 
 DetectFn = Callable[[np.ndarray, RecognitionConfig, int], list[Slot]]
 TemplateProvider = Callable[[str], Sequence[np.ndarray]]
+IdsProvider = Callable[[str], Sequence[str]]
 
 
 def _crop(screen: np.ndarray, bbox: BBox) -> np.ndarray:
@@ -40,6 +41,7 @@ def locate_cards(
     cache_dir: Path | None = None,
     detect: DetectFn = region.detect_slots,
     templates_provider: TemplateProvider | None = None,
+    ids_provider: IdsProvider | None = None,
 ) -> list[CardLocation]:
     """Locate each pack card in ``screen``. Returns one entry per assigned slot."""
     cfg = cfg or RecognitionConfig()
@@ -58,14 +60,40 @@ def locate_cards(
                 expansion, name, cfg.template_size, cache_dir=cache_dir, mode=cfg.prep_mode
             )
 
-    scores = identify.build_score_matrix(slot_images, names, templates_provider)
+    if ids_provider is None:
+        def ids_provider(name: str):  # noqa: E306 - local default
+            # Same order as the default templates (both from booster_artwork_ids),
+            # so best_tpl indexes straight into this id list.
+            refs = scryfall_art.booster_artwork_ids(expansion, name, cache_dir=cache_dir)
+            return [r.scryfall_id for r in refs]
+
+    scores, best_tpl = identify.build_score_matrix(slot_images, names, templates_provider)
     pairs = identify.assign(scores, min_affinity=cfg.min_affinity)
     if _log.isEnabledFor(logging.DEBUG):
         _log_confidence(slots, names, scores, pairs)
     return [
-        CardLocation(name=names[j], bbox=slots[i].bbox, score=score)
+        CardLocation(
+            name=names[j],
+            bbox=slots[i].bbox,
+            score=score,
+            printing_id=_printing_id_for(ids_provider, names[j], int(best_tpl[i, j])),
+        )
         for i, j, score in pairs
     ]
+
+
+def _printing_id_for(
+    ids_provider: IdsProvider, name: str, tpl_index: int
+) -> str | None:
+    """The printing id at ``tpl_index`` for ``name``, or ``None`` if out of range.
+
+    ``build_score_matrix`` yields ``-1`` when a name had no templates, and a
+    provider may disagree in length with the templates, so bounds are guarded.
+    """
+    if tpl_index < 0:
+        return None
+    ids = ids_provider(name)
+    return ids[tpl_index] if 0 <= tpl_index < len(ids) else None
 
 
 def _log_confidence(

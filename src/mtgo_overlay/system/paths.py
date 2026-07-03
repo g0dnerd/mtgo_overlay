@@ -70,6 +70,10 @@ def ratings_cache_dir() -> Path:
     return _ensure(cache_dir() / "ratings")
 
 
+def prices_cache_dir() -> Path:
+    return _ensure(cache_dir() / "prices")
+
+
 def scryfall_cache_dir() -> Path:
     return _ensure(cache_dir() / "scryfall")
 
