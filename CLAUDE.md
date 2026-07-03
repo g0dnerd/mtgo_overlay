@@ -47,6 +47,11 @@ uv run python run.py
 .\build.ps1   # -> dist\MtgoOverlay.exe
 ```
 
+Release (WSL): `scripts/release.sh [patch|minor|major|X.Y.Z] [-b BRANCH]` bumps
+`__version__` on the feature branch, runs the tests, merges into `main`, and
+pushes an annotated `vX.Y.Z` tag (which triggers the Windows build). Defaults to a
+patch bump of the current branch; refuses a dirty tree or an existing tag.
+
 There is no configured linter/formatter.
 
 ## Architecture
