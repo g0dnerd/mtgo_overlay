@@ -5,8 +5,10 @@ from __future__ import annotations
 from mtgo_overlay.config.settings import OverlayStyle
 from mtgo_overlay.overlay.overlay_window import (
     CITATION,
+    PRICE_CITATION,
     LabelSpec,
     OverlayWindow,
+    format_tix,
     percentile_rank,
     ramp_color,
 )
@@ -109,6 +111,58 @@ def test_render_to_image_draws_pixels(qapp):
         for y in range(rect.y(), rect.y() + rect.height())
     )
     assert painted > 0
+
+
+# --- ticket price pill ------------------------------------------------------
+
+
+def test_format_tix():
+    assert format_tix(2.11) == "2.1 tix"
+    assert format_tix(0.0) == "0.0 tix"
+    assert format_tix(None) == ""
+
+
+def test_price_pill_sits_below_wr_and_within_box(qapp):
+    win = OverlayWindow(OverlayStyle())
+    win.resize(600, 600)
+    spec = LabelSpec(62.5, 0.6, 100, 100, 120, 168, tix=2.1)
+    win.set_labels([spec])
+
+    (_, wr_rect) = win.label_rects()[0]
+    priced = win.price_rects()
+    assert len(priced) == 1
+    _, price_rect = priced[0]
+
+    # Below the win-rate pill.
+    assert price_rect.top() >= wr_rect.bottom()
+    # Fully inside the card box.
+    assert _contains((spec.x, spec.y, spec.w, spec.h), price_rect)
+    # Right-aligned like the WR pill (right edges roughly coincide).
+    assert abs(price_rect.right() - wr_rect.right()) <= 2
+
+
+def test_price_pill_absent_without_tix(qapp):
+    win = OverlayWindow(OverlayStyle())
+    win.set_labels([LabelSpec(62.5, 0.6, 100, 100, 120, 168)])  # tix defaults to None
+    assert win.price_rects() == []
+
+
+def test_price_pill_clamped_in_short_box(qapp):
+    win = OverlayWindow(OverlayStyle())
+    win.resize(600, 600)
+    # A very short card box forces the stacked pills to clamp inside it.
+    spec = LabelSpec(62.5, 0.6, 100, 100, 120, 40, tix=9.9)
+    win.set_labels([spec])
+    _, price_rect = win.price_rects()[0]
+    assert _contains((spec.x, spec.y, spec.w, spec.h), price_rect)
+
+
+def test_caption_appends_price_credit_only_when_priced(qapp):
+    win = OverlayWindow(OverlayStyle())
+    win.set_labels([LabelSpec(62.5, 0.6, 100, 100, 120, 168)])  # no price
+    assert win.caption_text() == CITATION
+    win.set_labels([LabelSpec(62.5, 0.6, 100, 100, 120, 168, tix=2.1)])
+    assert win.caption_text() == f"{CITATION} · {PRICE_CITATION}"
 
 
 # --- percentile coloring (pure) --------------------------------------------

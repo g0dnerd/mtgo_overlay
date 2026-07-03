@@ -34,6 +34,7 @@ from .capture.screen_capture import capture_client_area
 from .config.settings import Settings
 from .data import embargo, expansions, sets
 from .data.expansions import SupportedSets
+from .data.prices_repo import CardPrice, PricesRepository
 from .data.ratings_repo import (
     GROUP_ALL,
     GROUP_TOP,
@@ -88,15 +89,23 @@ def build_label_specs(
     ratings: list[CardRating],
     dpr: float,
     distribution: list[float] | None = None,
+    prices: list[CardPrice] | None = None,
+    *,
+    show_prices: bool = False,
+    price_min_tix: float = 0.0,
 ) -> list[LabelSpec]:
-    """Join located cards with ratings by name, mapping to overlay coords.
+    """Join located cards with ratings (by name) and prices (by printing id),
+    mapping to overlay coords.
 
     Each label's color tier is the card's percentile within ``distribution`` (the
     whole set's GIH WRs), so coloring is set-relative rather than absolute. Names
-    absent from ``ratings`` (basic lands are filtered upstream) get no label.
+    absent from ``ratings`` (basic lands are filtered upstream) get no label. A
+    price rides along only when ``show_prices`` is on and the matched printing's
+    ``tix`` is at/above ``price_min_tix``.
     """
     rating_by_name = {r.name: r.gih_wr for r in ratings}
     dist = distribution or []
+    tix_by_id = {p.printing_id: p.tix for p in (prices or [])}
     specs: list[LabelSpec] = []
     for loc in located:
         if loc.name not in rating_by_name:
@@ -104,7 +113,12 @@ def build_label_specs(
         wr = rating_by_name[loc.name]
         tier = percentile_rank(wr, dist) if wr is not None else None
         x, y, w, h = map_capture_to_logical(loc.bbox.as_tuple(), dpr)
-        specs.append(LabelSpec(wr, tier, x, y, w, h))
+        tix = None
+        if show_prices and loc.printing_id is not None:
+            raw = tix_by_id.get(loc.printing_id)
+            if raw is not None and raw >= price_min_tix:
+                tix = raw
+        specs.append(LabelSpec(wr, tier, x, y, w, h, tix))
     return specs
 
 
@@ -206,7 +220,9 @@ class _WorkerSignals(QObject):
 class RecognitionWorker(QRunnable):
     """Off-UI: capture -> locate -> lookup, then emit a payload."""
 
-    def __init__(self, generation, hwnd, names, expansion, fmt, repo, cfg, group):
+    def __init__(
+        self, generation, hwnd, names, expansion, fmt, repo, price_repo, cfg, group
+    ):
         super().__init__()
         self.signals = _WorkerSignals()
         self.generation = generation
@@ -215,6 +231,7 @@ class RecognitionWorker(QRunnable):
         self.expansion = expansion
         self.fmt = fmt
         self.repo = repo
+        self.price_repo = price_repo
         self.cfg = cfg
         self.group = group
 
@@ -237,11 +254,16 @@ class RecognitionWorker(QRunnable):
                     "Cards NOT located (%d): %s", len(missing), "; ".join(missing)
                 )
             ratings = self.repo.lookup(self.expansion, self.fmt, self.names, self.group)
+            printing_ids = [
+                loc.printing_id for loc in located if loc.printing_id is not None
+            ]
+            prices = self.price_repo.lookup(self.expansion, printing_ids)
             self.signals.labelsReady.emit(
                 {
                     "generation": self.generation,
                     "located": located,
                     "ratings": ratings,
+                    "prices": prices,
                     "rect": rect,
                 }
             )
@@ -256,6 +278,7 @@ class _EnsureWorker(QRunnable):
     def __init__(
         self,
         repo,
+        price_repo,
         expansion,
         fmt,
         names,
@@ -266,6 +289,7 @@ class _EnsureWorker(QRunnable):
     ):
         super().__init__()
         self.repo = repo
+        self.price_repo = price_repo
         self.expansion = expansion
         self.fmt = fmt
         self.names = names
@@ -310,6 +334,11 @@ class _EnsureWorker(QRunnable):
             )
         except Exception as exc:  # noqa: BLE001
             _log.warning("Artwork warm failed: %s", exc)
+        if self.settings.show_prices:
+            try:
+                self.price_repo.ensure(self.expansion)
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("Price warm failed: %s", exc)
         _log.info(
             "Draft data ready for %s - recognition can now run offline.", self.expansion
         )
@@ -324,11 +353,14 @@ class _PrefetchWorker(QRunnable):
     per-pack). Ratings are best-effort: a 17Lands hiccup never fails the slow,
     valuable art download."""
 
-    def __init__(self, expansion, fmt, repo, on_done, start_date=None, use_live=True):
+    def __init__(
+        self, expansion, fmt, repo, price_repo, on_done, start_date=None, use_live=True
+    ):
         super().__init__()
         self.expansion = expansion
         self.fmt = fmt
         self.repo = repo
+        self.price_repo = price_repo
         self.start_date = start_date
         self.use_live = use_live
         self.signals = _WorkerSignals()
@@ -349,6 +381,12 @@ class _PrefetchWorker(QRunnable):
             scryfall_art.ensure_set_artwork(
                 self.expansion, names, paths.scryfall_cache_dir()
             )
+            # Prices come from the same set data; warm them so a later draft (with
+            # prices on) is fully offline regardless of the current toggle.
+            try:
+                self.price_repo.ensure(self.expansion)
+            except Exception as exc:  # noqa: BLE001 - prices are best-effort
+                _log.warning("Price warm failed for %s: %s", self.expansion, exc)
         except Exception as exc:  # noqa: BLE001 - worker boundary
             _log.warning("Set artwork download failed for %s: %s", self.expansion, exc)
             self.signals.labelsReady.emit(
@@ -474,6 +512,7 @@ class AppController(QObject):
         self.cfg = RecognitionConfig()
         client = SeventeenLandsClient(self.settings.user_agent)
         self.repo = RatingsRepository(paths.ratings_cache_dir(), client=client)
+        self.price_repo = PricesRepository(paths.prices_cache_dir())
         self._supported = SupportedSets(client, paths.cache_dir())
         self._filters: dict = {}
         self.overlay = OverlayWindow(self.settings.overlay)
@@ -716,6 +755,7 @@ class AppController(QObject):
         self.overlay.set_notice(None)
         worker = _EnsureWorker(
             self.repo,
+            self.price_repo,
             self.expansion,
             self.settings.fmt,
             self.log.current_pack,
@@ -798,6 +838,7 @@ class AppController(QObject):
             self.expansion,
             self.settings.fmt,
             self.repo,
+            self.price_repo,
             self.cfg,
             self.settings.user_group,
         )
@@ -820,7 +861,13 @@ class AppController(QObject):
             self.expansion, self.settings.fmt, self.settings.user_group
         )
         specs = build_label_specs(
-            payload["located"], payload["ratings"], dpr, distribution
+            payload["located"],
+            payload["ratings"],
+            dpr,
+            distribution,
+            payload.get("prices"),
+            show_prices=self.settings.show_prices,
+            price_min_tix=self.settings.price_min_tix,
         )
         _log.info(
             "Recognition done: located %d card(s) -> %d label(s) shown "
@@ -961,6 +1008,15 @@ class AppController(QObject):
             )
         menu.addAction(csv_action)
 
+        prices_action = QAction("Show ticket prices", menu)
+        prices_action.setCheckable(True)
+        prices_action.setChecked(self.settings.show_prices)
+        prices_action.setToolTip(
+            "Draw each card's MTGO ticket price (from Scryfall) below its win rate."
+        )
+        prices_action.triggered.connect(self._toggle_prices)
+        menu.addAction(prices_action)
+
         download_action = QAction("Download set…", menu)
         download_action.triggered.connect(self._prompt_download_set)
         menu.addAction(download_action)
@@ -1018,6 +1074,7 @@ class AppController(QObject):
                 expansion,
                 fmt,
                 self.repo,
+                self.price_repo,
                 self._on_prefetch_done,
                 start_date=self._start_date_for(expansion),
                 use_live=live,
@@ -1068,6 +1125,16 @@ class AppController(QObject):
         _log.info("Win rate source set to %s players.", group)
         self._reimport_ratings()
 
+    def _toggle_prices(self, checked: bool) -> None:
+        """Show/hide the ticket-price pill. Re-runs draft prep (which warms the
+        price cache when turning on) + recognition so the change lands on the
+        current pack without waiting for the next one."""
+        self.settings.show_prices = checked
+        self.settings.save()
+        _log.info("Ticket prices %s.", "enabled" if checked else "disabled")
+        self._refresh_tray()
+        self._reimport_ratings()
+
     def _reimport_ratings(self) -> None:
         """Rebuild the ratings cache from the current CSV and re-recognize, so new
         win rates *and* their set-relative colors take effect without a new draft."""
@@ -1076,6 +1143,7 @@ class AppController(QObject):
         _log.info("Re-importing ratings for the active %s pack.", self.expansion)
         worker = _EnsureWorker(
             self.repo,
+            self.price_repo,
             self.expansion,
             self.settings.fmt,
             self.log.current_pack,

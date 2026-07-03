@@ -41,6 +41,65 @@ def test_locate_cards_wiring(make_grid, distinct_tiles):
         assert loc.name == f"tile_{idx}", f"{loc.name} mislocated at box {idx}"
 
 
+def test_locate_cards_attaches_matched_printing_id():
+    import numpy as np
+
+    from mtgo_overlay.recognition import reference
+
+    cfg = RecognitionConfig(min_affinity=-1.0)
+    rng = np.random.default_rng(3)
+    tile = rng.integers(0, 256, size=(140, 100, 3), dtype=np.uint8)
+    decoy = rng.integers(0, 256, size=(140, 100, 3), dtype=np.uint8)
+    screen = np.zeros((200, 200, 3), dtype=np.uint8)
+    screen[10:150, 10:110] = tile  # the slot is a pixel copy of the 2nd printing
+
+    def fake_detect(screen, _cfg, _expected):
+        return [Slot(BBox(10, 10, 100, 140), row=0, col=0)]
+
+    def templates_provider(name):
+        return [
+            reference.prepare(decoy, cfg.template_size, mode=cfg.prep_mode),
+            reference.prepare(tile, cfg.template_size, mode=cfg.prep_mode),
+        ]
+
+    located = pipeline.locate_cards(
+        screen,
+        ["Card"],
+        "TST",
+        cfg,
+        detect=fake_detect,
+        templates_provider=templates_provider,
+        ids_provider=lambda name: ["decoy-id", "match-id"],
+    )
+    assert len(located) == 1
+    assert located[0].printing_id == "match-id"  # id of the winning template
+
+
+def test_locate_cards_printing_id_none_when_ids_out_of_range():
+    import numpy as np
+
+    from mtgo_overlay.recognition import reference
+
+    cfg = RecognitionConfig(min_affinity=-1.0)
+    rng = np.random.default_rng(4)
+    tile = rng.integers(0, 256, size=(140, 100, 3), dtype=np.uint8)
+    screen = np.zeros((200, 200, 3), dtype=np.uint8)
+    screen[10:150, 10:110] = tile
+
+    located = pipeline.locate_cards(
+        screen,
+        ["Card"],
+        "TST",
+        cfg,
+        detect=lambda *_: [Slot(BBox(10, 10, 100, 140), row=0, col=0)],
+        templates_provider=lambda name: [
+            reference.prepare(tile, cfg.template_size, mode=cfg.prep_mode)
+        ],
+        ids_provider=lambda name: [],  # provider disagrees with templates
+    )
+    assert located[0].printing_id is None  # bounds-guarded, no IndexError
+
+
 def test_locate_cards_empty_when_no_slots():
     import numpy as np
 

@@ -38,6 +38,10 @@ def format_wr(gih_wr: float | None) -> str:
     return "N/A" if gih_wr is None else f"{gih_wr:.1f}"
 
 
+def format_tix(tix: float | None) -> str:
+    return "" if tix is None else f"{tix:.1f} tix"
+
+
 def percentile_rank(value: float, sorted_values: list[float]) -> float | None:
     """Midrank percentile of ``value`` in ``sorted_values`` -> 0..1, or ``None``
     when there's too little data to rank against."""
@@ -69,7 +73,9 @@ def ramp_color(tier: float | None, unknown: str = "#6b7280") -> QColor:
 @dataclass(frozen=True)
 class LabelSpec:
     """A GIH win rate (shown as text), its percentile-within-set ``tier`` (drives
-    the pill color), and the card box (overlay-logical px) it belongs to."""
+    the pill color), the card box (overlay-logical px) it belongs to, and an
+    optional MTGO ticket price ``tix`` drawn as a second pill below the win rate.
+    ``tix is None`` (below threshold / prices off) draws no price pill."""
 
     gih_wr: float | None
     tier: float | None
@@ -77,6 +83,7 @@ class LabelSpec:
     y: int
     w: int
     h: int
+    tix: float | None = None
 
 
 # --- shared geometry + painting --------------------------------------------
@@ -126,8 +133,55 @@ def paint_label(
     painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, format_wr(spec.gih_wr))
 
 
-# 17Lands asks that tools building on their data keep a visible, top-level credit.
+def price_font_for(style: OverlayStyle, card_h: int) -> QFont:
+    font = QFont(style.font_family)
+    font.setPixelSize(max(8, round(card_h * style.price_font_h_frac)))
+    font.setBold(True)
+    return font
+
+
+def compute_price_rect(
+    spec: LabelSpec, style: OverlayStyle, fm: QFontMetrics
+) -> QRectF:
+    """The price pill rect: right-aligned like the WR pill, its top edge a small
+    gap below the WR pill's bottom, clamped fully inside the card box. ``fm`` is
+    the *price* font's metrics."""
+    wr_rect = compute_label_rect(spec, style, QFontMetrics(font_for(style, spec.h)))
+    pad_x = style.pad_x_frac * spec.w
+    pad_y = style.pad_y_frac * spec.h
+    bw = fm.horizontalAdvance(format_tix(spec.tix)) + 2 * pad_x
+    bh = fm.height() + 2 * pad_y
+    inset = style.inset_x_frac * spec.w
+    x = spec.x + spec.w - inset - bw
+    y = wr_rect.bottom() + style.price_gap_frac * spec.h
+    # Clamp fully inside the card box.
+    x = max(spec.x, min(x, spec.x + spec.w - bw))
+    y = max(spec.y, min(y, spec.y + spec.h - bh))
+    return QRectF(x, y, bw, bh)
+
+
+def paint_price(
+    painter: QPainter, rect: QRectF, spec: LabelSpec, style: OverlayStyle
+) -> None:
+    radius = rect.height() / 2
+    painter.setFont(price_font_for(style, spec.h))
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(0, 0, 0, 90))
+    painter.drawRoundedRect(
+        rect.translated(0, max(1.0, rect.height() * 0.06)), radius, radius
+    )
+    # Fixed-color pill (distinct from the WR ramp) with a thin dark rim.
+    painter.setBrush(QColor(style.price_color))
+    painter.setPen(QPen(QColor(0, 0, 0, 160), 1.2))
+    painter.drawRoundedRect(rect, radius, radius)
+    painter.setPen(QColor(style.fg))
+    painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, format_tix(spec.tix))
+
+
+# 17Lands asks that tools building on their data keep a visible, top-level credit;
+# Scryfall likewise asks for attribution wherever its card data is shown.
 CITATION = "Win rates: 17Lands"
+PRICE_CITATION = "Prices: Scryfall"
 
 
 class OverlayWindow(QWidget):
@@ -165,14 +219,27 @@ class OverlayWindow(QWidget):
 
     def caption_text(self) -> str | None:
         """The bottom-left caption for the current state: the embargo notice if
-        set, else the standing 17Lands citation when pills are showing."""
+        set, else the standing 17Lands citation when pills are showing, with a
+        Scryfall credit appended whenever any price pill is drawn."""
         if self._notice:
             return self._notice
-        return CITATION if self._labels else None
+        if not self._labels:
+            return None
+        if any(spec.tix is not None for spec in self._labels):
+            return f"{CITATION} · {PRICE_CITATION}"
+        return CITATION
 
     def label_rects(self) -> list[tuple[LabelSpec, QRect]]:
         """Computed pill rects for the current labels (no painting)."""
         return [(spec, self._compute_rect(spec).toRect()) for spec in self._labels]
+
+    def price_rects(self) -> list[tuple[LabelSpec, QRect]]:
+        """Computed price-pill rects for labels that carry a ``tix`` (no painting)."""
+        return [
+            (spec, self._compute_price_rect(spec).toRect())
+            for spec in self._labels
+            if spec.tix is not None
+        ]
 
     # --- geometry ------------------------------------------------------------
 
@@ -182,6 +249,10 @@ class OverlayWindow(QWidget):
     def _compute_rect(self, spec: LabelSpec) -> QRectF:
         return compute_label_rect(spec, self.style, QFontMetrics(self._font_for(spec.h)))
 
+    def _compute_price_rect(self, spec: LabelSpec) -> QRectF:
+        fm = QFontMetrics(price_font_for(self.style, spec.h))
+        return compute_price_rect(spec, self.style, fm)
+
     # --- painting ------------------------------------------------------------
 
     def paintEvent(self, event) -> None:  # noqa: N802 (Qt override)
@@ -189,6 +260,8 @@ class OverlayWindow(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         for spec in self._labels:
             paint_label(painter, self._compute_rect(spec), spec, self.style)
+            if spec.tix is not None:
+                paint_price(painter, self._compute_price_rect(spec), spec, self.style)
         caption = self.caption_text()
         if caption:
             self._paint_caption(painter, caption)

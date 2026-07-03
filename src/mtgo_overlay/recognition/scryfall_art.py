@@ -138,12 +138,13 @@ def _front_name(name: str) -> str:
     return name.split(" //", 1)[0].strip()
 
 
-def _fetch_set_prints(expansion: str) -> dict[str, list[ArtRef]]:
-    """Every booster-eligible printing in ``expansion``, grouped by card name.
+def _iter_set_cards(expansion: str):
+    """Yield every raw ``card`` dict in ``expansion`` (paginated, one query).
 
-    One paginated ``set:<exp> unique=prints`` search returns the whole set
-    (Scryfall paginates at 175/page, so ~2-4 requests cover any set), instead of
-    one search per card name. ``{}`` for an unknown set code.
+    One paginated ``set:<exp> unique=prints`` search covers the whole set
+    (Scryfall paginates at 175/page, so ~2-4 requests), so callers needing
+    artwork *and* callers needing prices share a single paging loop. Yields
+    nothing for an unknown set code (the search 404s).
     """
     params: dict | None = {
         "q": f"set:{expansion.lower()}",
@@ -151,24 +152,55 @@ def _fetch_set_prints(expansion: str) -> dict[str, list[ArtRef]]:
         "include_variations": "true",
     }
     url = f"{SCRYFALL_API}/cards/search"
-    cards: dict[str, list[ArtRef]] = {}
     while url:
         try:
             resp = _http_get(url, params=params)
         except requests.HTTPError as exc:
             if exc.response is not None and exc.response.status_code == 404:
-                return {}  # no cards match -> unknown set
+                return  # no cards match -> unknown set
             raise
         data = resp.json()
-        for card in data.get("data", []):
-            image_url = _image_url(card)
-            if not image_url:
-                continue
-            name = card.get("name", "")
-            cards.setdefault(name, []).append(ArtRef(card["id"], image_url, name))
+        yield from data.get("data", [])
         url = data.get("next_page") if data.get("has_more") else None
         params = None  # next_page already carries the query
+
+
+def _fetch_set_prints(expansion: str) -> dict[str, list[ArtRef]]:
+    """Every booster-eligible printing in ``expansion``, grouped by card name.
+
+    ``{}`` for an unknown set code.
+    """
+    cards: dict[str, list[ArtRef]] = {}
+    for card in _iter_set_cards(expansion):
+        image_url = _image_url(card)
+        if not image_url:
+            continue
+        name = card.get("name", "")
+        cards.setdefault(name, []).append(ArtRef(card["id"], image_url, name))
     return cards
+
+
+def _parse_tix(raw: object) -> float | None:
+    """Scryfall's ``prices.tix`` string -> float, or ``None`` when absent/blank."""
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def fetch_set_tix(expansion: str) -> dict[str, float | None]:
+    """MTGO ticket price per printing id for ``expansion`` (``{}`` for unknown set).
+
+    Reuses the same set search as the artwork index; the ``PricesRepository``
+    owns caching + TTL, so this always hits the network.
+    """
+    return {
+        card["id"]: _parse_tix((card.get("prices") or {}).get("tix"))
+        for card in _iter_set_cards(expansion)
+        if card.get("id")
+    }
 
 
 def _variants_path(expansion: str, cache_dir: Path) -> Path:

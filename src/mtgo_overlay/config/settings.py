@@ -36,6 +36,12 @@ class OverlayStyle:
     # Horizontal / vertical text padding as fractions of card width / height.
     pad_x_frac: float = 0.035
     pad_y_frac: float = 0.012
+    # Ticket-price pill: a fixed cool blue (distinct from the WR red->green ramp),
+    # its number height as a fraction of card height, and the gap between it and
+    # the WR pill above (fraction of card height).
+    price_color: str = "#2f80ed"
+    price_font_h_frac: float = 0.06
+    price_gap_frac: float = 0.02
 
 
 @dataclass
@@ -51,6 +57,10 @@ class Settings:
     # Which 17Lands player cohort the pill shows: "top" (top players) or "all".
     # "top" sends user_group=top; "all" omits the param (the site's aggregate).
     user_group: str = "top"
+    # MTGO ticket prices (from Scryfall, piggybacking the per-draft art fetch): a
+    # second pill below the win rate, shown only for cards at/above the threshold.
+    show_prices: bool = True
+    price_min_tix: float = 1.0
     # Set once the first-run privacy/affiliation notice has been accepted.
     accepted_disclaimer: bool = False
     # Polite identifying UA for the 17Lands endpoint (tool + contact).

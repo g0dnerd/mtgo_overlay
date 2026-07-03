@@ -52,8 +52,13 @@ class Slot:
 
 @dataclass(frozen=True)
 class CardLocation:
-    """A card name resolved to a screen position with a match score."""
+    """A card name resolved to a screen position with a match score.
+
+    ``printing_id`` is the Scryfall id of the specific printing whose artwork
+    won the match, so the overlay can price the right in-set version.
+    """
 
     name: str
     bbox: BBox
     score: float
+    printing_id: str | None = None
