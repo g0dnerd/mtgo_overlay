@@ -169,3 +169,40 @@ def test_new_pack_clears_awaiting_flag(qapp, tmp_path, monkeypatch):
     controller._on_log_modified("ignored")
 
     assert controller._awaiting_pack is False
+
+
+def _cohort_actions(menu):
+    return [a for a in menu.actions() if a.text().startswith("Win rates:")]
+
+
+def test_cohort_picks_disabled_when_live_off(qapp, tmp_path, monkeypatch):
+    # Live 17Lands off => the user's CSV is the source, which is a single cohort.
+    controller = _controller(qapp, tmp_path, monkeypatch)
+    controller.settings.use_live_17lands = False
+
+    menu = controller._build_menu()
+    actions = _cohort_actions(menu)
+    assert len(actions) == 2
+    assert all(not a.isEnabled() for a in actions)
+
+
+def test_cohort_picks_enabled_with_live_and_no_draft(qapp, tmp_path, monkeypatch):
+    # Live on, no active draft => live is the source, so the cohort split applies.
+    controller = _controller(qapp, tmp_path, monkeypatch)
+    controller.settings.use_live_17lands = True
+    controller.expansion = ""
+
+    menu = controller._build_menu()
+    assert all(a.isEnabled() for a in _cohort_actions(menu))
+
+
+def test_cohort_picks_disabled_when_embargoed(qapp, tmp_path, monkeypatch):
+    # Live on but the active set is still under the new-set embargo (unknown start
+    # date fails closed) => the CSV stands in, so the cohort split is moot.
+    controller = _controller(qapp, tmp_path, monkeypatch)
+    controller.settings.use_live_17lands = True
+    controller.expansion = "FIN"
+    controller._filters = {}
+
+    menu = controller._build_menu()
+    assert all(not a.isEnabled() for a in _cohort_actions(menu))

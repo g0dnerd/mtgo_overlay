@@ -675,6 +675,15 @@ class AppController(QObject):
             self._start_date_for(expansion), date.today()
         )
 
+    def _ratings_from_csv(self) -> bool:
+        """Whether the effective win-rate source is the user's own CSV rather than
+        the live 17Lands endpoint - either because live mode is off, or the active
+        set's live data is still under the new-set embargo. The top/all cohort
+        split is a live-endpoint parameter, so a CSV source makes that pick moot."""
+        if not self.settings.use_live_17lands:
+            return True
+        return bool(self.expansion) and self._live_blocked(self.expansion)
+
     def _embargo_notice(self, expansion: str) -> str:
         lift = embargo.lift_date(self._start_date_for(expansion))
         when = f"{lift.strftime('%b')} {lift.day}, {lift.year}" if lift else None
@@ -689,6 +698,9 @@ class AppController(QObject):
         per draft, as soon as a non-empty pack is known."""
         self._draft_prepared = True
         blocked = self._live_blocked(self.expansion)
+        # Now that the active set (and its embargo status) is known, resync the
+        # tray so the cohort picks reflect whether this draft reads live or CSV.
+        self._refresh_tray()
         # Embargoed with no CSV fallback: nothing to show, so suppress pills and
         # surface a notice (which doubles as the 17Lands citation) instead.
         self._embargo_block = blocked and not self.settings.manual_csv_path
@@ -918,6 +930,9 @@ class AppController(QObject):
         # method; mutually-exclusive checkable picks for the win-rate cohort.
         self._group_actions = QActionGroup(menu)
         self._group_actions.setExclusive(True)
+        # The top/all cohort split is a live-endpoint parameter; a user CSV export
+        # is a single cohort, so grey the picks out whenever the CSV is the source.
+        cohort_from_csv = self._ratings_from_csv()
         for label, group in (
             ("Win rates: Top players", GROUP_TOP),
             ("Win rates: All players", GROUP_ALL),
@@ -926,6 +941,12 @@ class AppController(QObject):
             action.setCheckable(True)
             action.setChecked(self.settings.user_group == group)
             action.triggered.connect(lambda _checked, g=group: self._set_user_group(g))
+            if cohort_from_csv:
+                action.setEnabled(False)
+                action.setToolTip(
+                    "The top/all-players split needs live 17Lands data; a CSV "
+                    "export covers a single cohort."
+                )
             self._group_actions.addAction(action)
             menu.addAction(action)
 
