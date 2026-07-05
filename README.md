@@ -76,6 +76,10 @@ To respect those guidelines, live win rates for a just-released set are held bac
 
   > MTGO Draft Helper is unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.
 
+## AI disclaimer
+
+Parts of the code in this repository have been authored by Claude Opus 4.8.
+
 ## License
 
 Released under the **GNU General Public License v3.0 or later**. See [`LICENSE`](LICENSE) for the full text.
