@@ -111,6 +111,19 @@ def test_setup_page_csv_choice_requires_path_then_commits(qapp, tmp_path, monkey
     assert Settings.load().manual_csv_path == str(csv)
 
 
+def test_setup_page_commits_prices_choice(qapp, tmp_path, monkeypatch):
+    settings = _settings(tmp_path, monkeypatch)
+    page = SetupPage(settings)
+    page.path_edit.setText(str(tmp_path / "logs"))
+    page.name_edit.setText("Tester")
+
+    assert page.prices_box.isChecked() is True  # on by default
+    page.prices_box.setChecked(False)
+    assert page.validatePage() is True
+    assert settings.show_prices is False
+    assert Settings.load().show_prices is False
+
+
 def test_setup_page_defaults_to_csv_when_already_configured(qapp):
     settings = Settings(manual_csv_path="/x/r.csv", use_live_17lands=False)
     page = SetupPage(settings)

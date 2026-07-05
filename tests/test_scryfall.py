@@ -226,49 +226,52 @@ def test_fetch_artwork_downloads_and_caches(tmp_path, monkeypatch):
     assert out.read_bytes() == b"PNG"
 
 
-def test_fetch_set_tix_maps_printings_and_parses(monkeypatch):
-    pages = [
-        FakeResp(
-            {
-                "has_more": True,
-                "next_page": "http://api/next",
-                "data": [
-                    {"id": "a1", "name": "X", "prices": {"tix": "2.11"}},
-                    {"id": "a2", "name": "X", "prices": {"tix": "0.75"}},
-                ],
-            }
-        ),
-        FakeResp(
-            {
-                "has_more": False,
-                "data": [
-                    {"id": "a3", "name": "Y", "prices": {"tix": None}},
-                    {"id": "a4", "name": "Z", "prices": {}},  # no tix key
-                ],
-            }
-        ),
-    ]
-    calls = {"n": 0}
+def test_set_index_harvests_mtgo_id_and_maps_to_scryfall_id(tmp_path, monkeypatch):
+    page = FakeResp(
+        {
+            "has_more": False,
+            "data": [
+                {"id": "a1", "name": "X", "image_uris": {"png": "u1"}, "mtgo_id": 90653},
+                {"id": "a2", "name": "X", "image_uris": {"png": "u2"}, "mtgo_id": 90654},
+                {"id": "a3", "name": "Paper", "image_uris": {"png": "u3"}},  # no mtgo_id
+            ],
+        }
+    )
+    monkeypatch.setattr(scryfall_art, "_http_get", lambda *a, **k: page)
 
-    def fake_get(url, params=None):
-        resp = pages[calls["n"]]
-        calls["n"] += 1
-        return resp
+    refs = scryfall_art.booster_artwork_ids("STX", "X", cache_dir=tmp_path)
+    assert [r.mtgo_id for r in refs] == [90653, 90654]
 
-    monkeypatch.setattr(scryfall_art, "_http_get", fake_get)
-    tix = scryfall_art.fetch_set_tix("STX")
-    assert tix == {"a1": 2.11, "a2": 0.75, "a3": None, "a4": None}
-    assert calls["n"] == 2  # one paginated set search, shared with the art index
+    # The scryfall_id -> mtgo_id bridge drops the paper-only printing.
+    monkeypatch.setattr(
+        scryfall_art, "_http_get", lambda *a, **k: pytest.fail("network")
+    )
+    assert scryfall_art.set_mtgo_ids("STX", cache_dir=tmp_path) == {
+        "a1": 90653,
+        "a2": 90654,
+    }
+    # mtgo_id round-trips through the version-stamped on-disk index.
+    cache = json.loads((tmp_path / "STX_variants.json").read_text())
+    assert cache["version"] == 2
+    assert cache["cards"]["X"][0]["mtgo_id"] == 90653
 
 
-def test_fetch_set_tix_unknown_set_returns_empty(monkeypatch):
-    def fake_get(url, params=None):
-        resp = requests.Response()
-        resp.status_code = 404
-        raise requests.HTTPError(response=resp)
-
-    monkeypatch.setattr(scryfall_art, "_http_get", fake_get)
-    assert scryfall_art.fetch_set_tix("ZZZ") == {}
+def test_legacy_index_without_version_is_refetched(tmp_path, monkeypatch):
+    # An old cache (pre-mtgo_id, no version) must not be trusted.
+    legacy = {
+        "complete": True,
+        "cards": {"X": [{"scryfall_id": "old", "image_url": "u", "name": "X"}]},
+    }
+    (tmp_path / "STX_variants.json").write_text(json.dumps(legacy))
+    page = FakeResp(
+        {
+            "has_more": False,
+            "data": [{"id": "new", "name": "X", "image_uris": {"png": "u"}, "mtgo_id": 5}],
+        }
+    )
+    monkeypatch.setattr(scryfall_art, "_http_get", lambda *a, **k: page)
+    refs = scryfall_art.booster_artwork_ids("STX", "X", cache_dir=tmp_path)
+    assert [r.scryfall_id for r in refs] == ["new"]  # refetched, not the legacy entry
 
 
 def test_ensure_set_artwork_fetches_set_once_and_dedups(tmp_path, monkeypatch):

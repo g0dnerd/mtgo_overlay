@@ -179,9 +179,9 @@ def paint_price(
 
 
 # 17Lands asks that tools building on their data keep a visible, top-level credit;
-# Scryfall likewise asks for attribution wherever its card data is shown.
+# Goatbots likewise asks for a link back wherever its price data is shown.
 CITATION = "Win rates: 17Lands"
-PRICE_CITATION = "Prices: Scryfall"
+PRICE_CITATION = "Prices: Goatbots"
 
 
 class OverlayWindow(QWidget):

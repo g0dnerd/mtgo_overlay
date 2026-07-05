@@ -2,13 +2,14 @@
 fixture screenshot and render the win-rate pill *and* the price pill below it,
 exactly as the live overlay would.
 
-Wires ``locate_cards`` (which now emits each card's matched ``printing_id``) ->
-``RatingsRepository.lookup`` + ``PricesRepository.lookup`` -> ``build_label_specs``
-(``show_prices=True``) and paints with the overlay's shared painters
+Wires ``locate_cards`` (which emits each card's matched Scryfall ``printing_id``,
+joined to its ``mtgo_id`` for the Goatbots feed) -> ``RatingsRepository.lookup`` +
+``PricesRepository.lookup`` -> ``build_label_specs`` (``show_prices=True``) and
+paints with the overlay's shared painters
 (``compute_label_rect``/``paint_label`` + ``compute_price_rect``/``paint_price``),
 so the preview matches the live overlay and stays matched — no constants here.
 
-    # real Scryfall prices for the matched printings (one extra set search):
+    # real Goatbots prices for the matched printings (one price-feed download):
     uv run python tools/price_preview.py tests/fixtures/msh/pack1_pick1.png \
         --csv tests/fixtures/ratings/sample_card_ratings.csv
 
@@ -137,9 +138,16 @@ def main() -> int:
         prices = _demo_prices(located)
     else:
         price_repo = PricesRepository(paths.prices_cache_dir())
-        price_repo.ensure(expansion)
-        printing_ids = [loc.printing_id for loc in located if loc.printing_id]
-        prices = price_repo.lookup(expansion, printing_ids)
+        price_repo.ensure()
+        sid_to_mtgo = scryfall_art.set_mtgo_ids(
+            expansion, cache_dir=paths.scryfall_cache_dir()
+        )
+        printings = [
+            (loc.printing_id, sid_to_mtgo.get(loc.printing_id))
+            for loc in located
+            if loc.printing_id
+        ]
+        prices = price_repo.lookup(printings)
 
     specs = build_label_specs(
         located,
