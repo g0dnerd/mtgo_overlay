@@ -1,14 +1,12 @@
 # MTGO Draft Helper
 
-A click-through, always-on-top overlay that draws 17Lands **Game-in-Hand Win Rate (GIH WR)** next to each card in the current Magic: The Gathering Online draft pack.
+A minimal overlay for Magic: the Gathering Online that draws 17Lands **Game-in-Hand Win Rate (GIH WR)** next to each card in the current draft pack.
 Card names come from MTGO's draft log, card positions from OpenCV template matching, and ratings from 17Lands.
-
-The overlay is transparent to clicks, so MTGO stays fully usable underneath it.
 
 ## Install
 
 Download `MtgoOverlaySetup.exe` from the [latest release](https://github.com/g0dnerd/mtgo_overlay/releases) and run it.
-It installs per-user (no admin prompt) into `%LOCALAPPDATA%\Programs\MtgoOverlay`, adds a Start-menu shortcut, and can optionally start on sign-in.
+It installs per-user (so no admin prompt) into `%LOCALAPPDATA%\Programs\MtgoOverlay`, adds a Start-menu shortcut, and can optionally start on sign-in.
 
 Because the installer is **unsigned**, Windows SmartScreen shows a warning the first time you run it - click **More info -> Run anyway**.
 
@@ -22,7 +20,7 @@ On first launch a short wizard walks you through everything:
 4. **Choose a win-rate source** - live 17Lands or your own CSV export.
 5. **Enable draft logging in MTGO** - Options -> Game History -> turn on draft logging. The overlay can only see your picks once MTGO is writing a log.
 
-Start (or replay) a draft and labels appear over the pack, updating each pick.
+Start a draft and labels appear over the pack, updating each pick.
 If win rates don't show up, use the tray menu's **Setup status…** to see what's missing.
 
 ## Configuration
