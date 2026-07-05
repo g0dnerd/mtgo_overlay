@@ -47,7 +47,8 @@ PRIVACY_TEXT = (
     "<p><b>Your screen stays on your machine.</b> Screenshots are processed "
     "locally and are never uploaded anywhere.</p>"
     "<p><b>Network access.</b> The only outbound requests are to <b>Scryfall</b> "
-    "(card images) and <b>17Lands</b> (win-rate data). No personal data is sent.</p>"
+    "(card images), <b>17Lands</b> (win-rate data), and <b>Goatbots</b> (MTGO "
+    "ticket prices). No personal data is sent.</p>"
     "<p><b>Not affiliated.</b> This project is not affiliated with, endorsed by, "
     "or sponsored by 17Lands or Wizards of the Coast. All trademarks belong to "
     "their respective owners.</p>"
@@ -190,6 +191,13 @@ class SetupPage(_Page):
         explain.setWordWrap(True)
         layout.addWidget(explain)
 
+        layout.addWidget(QLabel("<b>MTGO ticket prices</b>"))
+        self.prices_box = QCheckBox(
+            "Show each card's MTGO ticket price (from Goatbots), below its win rate"
+        )
+        self.prices_box.setChecked(settings.show_prices)
+        layout.addWidget(self.prices_box)
+
         self.csv_radio.toggled.connect(self._sync_source)
         self._sync_source()
 
@@ -239,6 +247,7 @@ class SetupPage(_Page):
             self.settings.manual_csv_path = self.csv_edit.text().strip()
         else:
             self.settings.use_live_17lands = True
+        self.settings.show_prices = self.prices_box.isChecked()
         self.settings.save()
         return True
 

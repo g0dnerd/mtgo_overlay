@@ -48,11 +48,16 @@ USER_AGENT = "MtgoOverlay/0.2 (+https://github.com/g0dnerd/mtgo_overlay; MTGO dr
 
 @dataclass(frozen=True)
 class ArtRef:
-    """One booster-eligible artwork of a card."""
+    """One booster-eligible artwork of a card.
+
+    ``mtgo_id`` is Magic Online's catalog id for this printing (``None`` for a
+    paper-only variant), the key that joins to the Goatbots price feed.
+    """
 
     scryfall_id: str
     image_url: str
     name: str
+    mtgo_id: int | None = None
 
 
 class _RateLimiter:
@@ -179,42 +184,26 @@ def _fetch_set_prints(expansion: str) -> dict[str, list[ArtRef]]:
         if not image_url:
             continue
         name = card.get("name", "")
-        cards.setdefault(name, []).append(ArtRef(card["id"], image_url, name))
+        cards.setdefault(name, []).append(
+            ArtRef(card["id"], image_url, name, card.get("mtgo_id"))
+        )
     return cards
-
-
-def _parse_tix(raw: object) -> float | None:
-    """Scryfall's ``prices.tix`` string -> float, or ``None`` when absent/blank."""
-    if raw is None:
-        return None
-    try:
-        return float(raw)
-    except (TypeError, ValueError):
-        return None
-
-
-def fetch_set_tix(expansion: str) -> dict[str, float | None]:
-    """MTGO ticket price per printing id for ``expansion`` (``{}`` for unknown set).
-
-    Reuses the same set search as the artwork index; the ``PricesRepository``
-    owns caching + TTL, so this always hits the network.
-    """
-    return {
-        card["id"]: _parse_tix((card.get("prices") or {}).get("tix"))
-        for card in _iter_set_cards(expansion)
-        if card.get("id")
-    }
 
 
 def _variants_path(expansion: str, cache_dir: Path) -> Path:
     return Path(cache_dir) / f"{expansion.upper()}_variants.json"
 
 
+# Bumped when the cached ArtRef shape changes so older indexes are refetched
+# rather than trusted; v2 added ``mtgo_id`` (the Goatbots price join key).
+_INDEX_VERSION = 2
+
+
 def _load_set_index(expansion: str, cache_dir: Path) -> dict[str, list[dict]] | None:
     """The cached full-set index, or ``None`` if absent/partial/legacy.
 
-    A ``None`` return forces a refetch — only an index written by this version
-    (``{"complete": true, ...}``) is trusted as a complete set enumeration.
+    A ``None`` return forces a refetch — only a complete index written by the
+    current version is trusted; an older one (missing ``mtgo_id``) is refetched.
     """
     path = _variants_path(expansion, cache_dir)
     if not path.exists():
@@ -223,7 +212,11 @@ def _load_set_index(expansion: str, cache_dir: Path) -> dict[str, list[dict]] | 
         blob = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    if isinstance(blob, dict) and blob.get("complete"):
+    if (
+        isinstance(blob, dict)
+        and blob.get("complete")
+        and blob.get("version") == _INDEX_VERSION
+    ):
         return blob.get("cards") or {}
     return None
 
@@ -235,6 +228,7 @@ def _save_set_index(
     path.parent.mkdir(parents=True, exist_ok=True)
     blob = {
         "complete": True,
+        "version": _INDEX_VERSION,
         "cards": {n: [asdict(r) for r in refs] for n, refs in cards.items()},
     }
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -298,6 +292,24 @@ def booster_artwork_ids(
     """
     index = set_artwork_index(expansion, cache_dir=cache_dir)
     return _lookup(index, name)
+
+
+def set_mtgo_ids(
+    expansion: str, *, cache_dir: Path | None = None
+) -> dict[str, int]:
+    """``{scryfall_id: mtgo_id}`` for every printing in ``expansion`` with an MTGO
+    id (cache-first, offline once the set is warmed).
+
+    Bridges the recognizer's matched Scryfall printing to the Goatbots price feed,
+    which is keyed by MTGO catalog id.
+    """
+    index = set_artwork_index(expansion, cache_dir=cache_dir)
+    return {
+        ref.scryfall_id: ref.mtgo_id
+        for refs in index.values()
+        for ref in refs
+        if ref.mtgo_id is not None
+    }
 
 
 # --- image fetch ------------------------------------------------------------

@@ -32,7 +32,7 @@ from PySide6.QtWidgets import QApplication
 
 from .capture.screen_capture import capture_client_area
 from .config.settings import Settings
-from .data import embargo, expansions, sets
+from .data import embargo, expansions, goatbots, sets
 from .data.expansions import SupportedSets
 from .data.prices_repo import CardPrice, PricesRepository
 from .data.ratings_repo import (
@@ -254,10 +254,17 @@ class RecognitionWorker(QRunnable):
                     "Cards NOT located (%d): %s", len(missing), "; ".join(missing)
                 )
             ratings = self.repo.lookup(self.expansion, self.fmt, self.names, self.group)
-            printing_ids = [
-                loc.printing_id for loc in located if loc.printing_id is not None
+            # Join each matched Scryfall printing to its MTGO id (offline, from the
+            # warmed set index) so the Goatbots feed can be looked up by mtgo_id.
+            sid_to_mtgo = scryfall_art.set_mtgo_ids(
+                self.expansion, cache_dir=paths.scryfall_cache_dir()
+            )
+            printings = [
+                (loc.printing_id, sid_to_mtgo.get(loc.printing_id))
+                for loc in located
+                if loc.printing_id is not None
             ]
-            prices = self.price_repo.lookup(self.expansion, printing_ids)
+            prices = self.price_repo.lookup(printings)
             self.signals.labelsReady.emit(
                 {
                     "generation": self.generation,
@@ -336,7 +343,7 @@ class _EnsureWorker(QRunnable):
             _log.warning("Artwork warm failed: %s", exc)
         if self.settings.show_prices:
             try:
-                self.price_repo.ensure(self.expansion)
+                self.price_repo.ensure()
             except Exception as exc:  # noqa: BLE001
                 _log.warning("Price warm failed: %s", exc)
         _log.info(
@@ -381,12 +388,12 @@ class _PrefetchWorker(QRunnable):
             scryfall_art.ensure_set_artwork(
                 self.expansion, names, paths.scryfall_cache_dir()
             )
-            # Prices come from the same set data; warm them so a later draft (with
-            # prices on) is fully offline regardless of the current toggle.
+            # Warm the (global) Goatbots price cache so a later draft with prices
+            # on is fully offline regardless of the current toggle.
             try:
-                self.price_repo.ensure(self.expansion)
+                self.price_repo.ensure()
             except Exception as exc:  # noqa: BLE001 - prices are best-effort
-                _log.warning("Price warm failed for %s: %s", self.expansion, exc)
+                _log.warning("Price warm failed: %s", exc)
         except Exception as exc:  # noqa: BLE001 - worker boundary
             _log.warning("Set artwork download failed for %s: %s", self.expansion, exc)
             self.signals.labelsReady.emit(
@@ -1017,6 +1024,14 @@ class AppController(QObject):
         prices_action.triggered.connect(self._toggle_prices)
         menu.addAction(prices_action)
 
+        # Goatbots asks for a link back wherever their price data is used; show it
+        # only while prices are actually on.
+        if self.settings.show_prices:
+            price_credit = QAction("Ticket prices from Goatbots", menu)
+            price_credit.setToolTip("Opens goatbots.com in your browser.")
+            price_credit.triggered.connect(self._open_goatbots)
+            menu.addAction(price_credit)
+
         download_action = QAction("Download set…", menu)
         download_action.triggered.connect(self._prompt_download_set)
         menu.addAction(download_action)
@@ -1206,6 +1221,12 @@ class AppController(QObject):
 
         QDesktopServices.openUrl(QUrl("https://www.17lands.com/card_data"))
 
+    def _open_goatbots(self) -> None:
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        QDesktopServices.openUrl(QUrl(goatbots.HOMEPAGE))
+
     def _show_about(self) -> None:
         from PySide6.QtCore import Qt
         from PySide6.QtWidgets import QMessageBox
@@ -1223,7 +1244,8 @@ class AppController(QObject):
             "of the Coast.<br><br>"
             f'Open source (GPL-3.0): <a href="{repo}">{repo}</a><br><br>'
             "Win-rate data courtesy of 17Lands. Card data &amp; images courtesy of "
-            "Scryfall.<br><br>"
+            "Scryfall. MTGO ticket prices courtesy of "
+            '<a href="https://www.goatbots.com/">Goatbots</a>.<br><br>'
             "MTGO Draft Helper is unofficial Fan Content permitted under the "
             "Fan Content Policy. Not approved/endorsed by Wizards. Portions of the "
             "materials used are property of Wizards of the Coast. "

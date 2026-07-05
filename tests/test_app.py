@@ -247,6 +247,18 @@ def test_cohort_picks_enabled_with_live_and_no_draft(qapp, tmp_path, monkeypatch
     assert all(a.isEnabled() for a in _cohort_actions(menu))
 
 
+def _price_credit_actions(menu):
+    return [a for a in menu.actions() if a.text() == "Ticket prices from Goatbots"]
+
+
+def test_goatbots_credit_shown_only_when_prices_on(qapp, tmp_path, monkeypatch):
+    controller = _controller(qapp, tmp_path, monkeypatch)
+    controller.settings.show_prices = True
+    assert len(_price_credit_actions(controller._build_menu())) == 1
+    controller.settings.show_prices = False
+    assert _price_credit_actions(controller._build_menu()) == []
+
+
 def test_cohort_picks_disabled_when_embargoed(qapp, tmp_path, monkeypatch):
     # Live on but the active set is still under the new-set embargo (unknown start
     # date fails closed) => the CSV stands in, so the cohort split is moot.
