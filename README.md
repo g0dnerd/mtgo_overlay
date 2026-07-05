@@ -17,7 +17,7 @@ Because the installer is **unsigned**, Windows SmartScreen shows a warning the f
 On first launch a short wizard walks you through everything:
 
 1. **Accept the privacy notice** (see [Privacy](#privacy) below).
-2. **Pick your MTGO log folder** - usually `%APPDATA%\Wizards of the Coast\Magic Online`.
+2. **Pick your MTGO log folder**.
 3. **Enter your exact MTGO screen name** (pre-filled from existing logs when possible).
 4. **Choose a win-rate source** - live 17Lands or your own CSV export.
 5. **Enable draft logging in MTGO** - Options -> Game History -> turn on draft logging. The overlay can only see your picks once MTGO is writing a log.
@@ -64,7 +64,7 @@ To respect those guidelines, live win rates for a just-released set are held bac
 ## Privacy
 
 - **Your screen stays on your machine.** The overlay screenshots the MTGO window to locate cards and processes those screenshots **locally**. They are never uploaded anywhere.
-- **The only outbound requests** are to **Scryfall** (card images) and **17Lands** (win-rate data). No personal data is sent.
+- **The only outbound requests** are to **Scryfall** (card images), **17Lands** (win-rate data) and **Goatbots** (card prices). No personal data is sent.
 
 ## Credits & attribution
 
