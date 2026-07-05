@@ -23,6 +23,13 @@ On first launch a short wizard walks you through everything:
 Start a draft and labels appear over the pack, updating each pick.
 If win rates don't show up, use the tray menu's **Setup status…** to see what's missing.
 
+## Ratings data (17Lands)
+
+By default the overlay reads a `card_ratings.csv` you download yourself from 17Lands' card data page - point the program at it using the tray menu or `manual_csv_path` in `config.toml`.
+Opting in to live 17Lands data instead pulls current win rates from 17Lands' internal endpoint (one small, cached request per set/format per 24h).
+That endpoint is undocumented, so it is **off by default** - review 17Lands' usage guidelines before enabling it.
+To respect those guidelines, live win rates for a just-released set are held back for 12 days; during that window you need to supply your own CSV to see ratings for the new set.
+
 ## Configuration
 
 Settings live in `%APPDATA%\MtgoOverlay\config.toml`. The wizard and tray menu write the common ones; you can also edit the file directly.
@@ -51,13 +58,6 @@ Overlay appearance is under an `[overlay]` table. Every size/offset is a _fracti
 | `inset_x_frac`     | `0.045`      | Pill inset from the card's right edge (fraction of width). |
 | `pad_x_frac`       | `0.035`      | Horizontal text padding (fraction of card width).          |
 | `pad_y_frac`       | `0.012`      | Vertical text padding (fraction of card height).           |
-
-## Ratings data (17Lands)
-
-By default the overlay reads a `card_ratings.csv` you download yourself from 17Lands' card data page - point `manual_csv_path` at it.
-Setting `use_live_17lands = true` instead pulls current win rates from 17Lands' internal endpoint (one small, cached request per set/format per 24h).
-That endpoint is undocumented, so it is **off by default** - review 17Lands' usage guidelines before enabling it.
-To respect those guidelines, live win rates for a just-released set are held back for 12 days; during that window supply your own CSV to see ratings for the new set.
 
 ## Privacy
 
