@@ -1,4 +1,4 @@
-"""reference.py template prep — testable with fixture PNGs, no Scryfall call."""
+"""reference.py template prep - testable with fixture PNGs, no Scryfall call."""
 
 from __future__ import annotations
 

@@ -2,7 +2,7 @@
 
 Every value is either a ratio, a tolerance, or a fraction of something present in
 the image (screen area, median card size). There are deliberately NO absolute
-pixel constants and no 1920x1080 assumptions — all scale comes from the cards
+pixel constants and no 1920x1080 assumptions - all scale comes from the cards
 actually detected, so the same config works at any MTGO size or DPI.
 """
 

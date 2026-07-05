@@ -1,4 +1,4 @@
-"""scryfall_art.py — enumeration, caching, rate limiting. All hermetic (no net)."""
+"""scryfall_art.py - enumeration, caching, rate limiting. All hermetic (no net)."""
 
 from __future__ import annotations
 
@@ -231,9 +231,23 @@ def test_set_index_harvests_mtgo_id_and_maps_to_scryfall_id(tmp_path, monkeypatc
         {
             "has_more": False,
             "data": [
-                {"id": "a1", "name": "X", "image_uris": {"png": "u1"}, "mtgo_id": 90653},
-                {"id": "a2", "name": "X", "image_uris": {"png": "u2"}, "mtgo_id": 90654},
-                {"id": "a3", "name": "Paper", "image_uris": {"png": "u3"}},  # no mtgo_id
+                {
+                    "id": "a1",
+                    "name": "X",
+                    "image_uris": {"png": "u1"},
+                    "mtgo_id": 90653,
+                },
+                {
+                    "id": "a2",
+                    "name": "X",
+                    "image_uris": {"png": "u2"},
+                    "mtgo_id": 90654,
+                },
+                {
+                    "id": "a3",
+                    "name": "Paper",
+                    "image_uris": {"png": "u3"},
+                },  # no mtgo_id
             ],
         }
     )
@@ -266,7 +280,9 @@ def test_legacy_index_without_version_is_refetched(tmp_path, monkeypatch):
     page = FakeResp(
         {
             "has_more": False,
-            "data": [{"id": "new", "name": "X", "image_uris": {"png": "u"}, "mtgo_id": 5}],
+            "data": [
+                {"id": "new", "name": "X", "image_uris": {"png": "u"}, "mtgo_id": 5}
+            ],
         }
     )
     monkeypatch.setattr(scryfall_art, "_http_get", lambda *a, **k: page)

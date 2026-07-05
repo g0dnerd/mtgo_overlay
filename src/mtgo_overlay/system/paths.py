@@ -79,8 +79,8 @@ def scryfall_cache_dir() -> Path:
 
 
 def clear_local_data() -> list[Path]:
-    """Delete all generated local data — caches (ratings + Scryfall art), the
-    persisted config, and logs + debug captures — and return the top-level
+    """Delete all generated local data - caches (ratings + Scryfall art), the
+    persisted config, and logs + debug captures - and return the top-level
     paths removed.
 
     The caller must release any open handles first (notably the app log file,

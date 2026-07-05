@@ -115,8 +115,6 @@ class PricesRepository:
             return None
         return self._prices().get(str(mtgo_id))
 
-    def lookup(
-        self, printings: Iterable[tuple[str, int | None]]
-    ) -> list[CardPrice]:
+    def lookup(self, printings: Iterable[tuple[str, int | None]]) -> list[CardPrice]:
         """Prices for ``(scryfall_id, mtgo_id)`` pairs, keyed back by Scryfall id."""
         return [CardPrice(sid, self.price_for(mid)) for sid, mid in printings]

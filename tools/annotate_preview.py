@@ -2,12 +2,12 @@
 
 Two modes:
 
-  # Region only — works NOW, no Scryfall needed. Draws detected slots
+  # Region only - works NOW, no Scryfall needed. Draws detected slots
   # (green=real, yellow=synthesized) so you can eyeball detect_slots on a real
   # MTGO screenshot.
   uv run python tools/annotate_preview.py shot.png --expected 15 --boxes-only
 
-  # Full — region + identification. Needs the owner's scryfall_art stubs
+  # Full - region + identification. Needs the owner's scryfall_art stubs
   # implemented (or a warmed cache), plus the pack name list.
   uv run python tools/annotate_preview.py shot.png --expansion MH3 \
       --names "Fanged Flames" "Drowner of Truth" ... --out annotated.png
@@ -60,17 +60,35 @@ def main() -> int:
             color = YELLOW if s.synthetic else GREEN
             b = s.bbox
             cv2.rectangle(canvas, (b.x, b.y), (b.x2, b.y2), color, 2)
-            cv2.putText(canvas, f"r{s.row}c{s.col}", (b.x + 3, b.y + 18),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
-        print(f"Detected {len(slots)} slots "
-              f"({sum(s.synthetic for s in slots)} synthesized).")
+            cv2.putText(
+                canvas,
+                f"r{s.row}c{s.col}",
+                (b.x + 3, b.y + 18),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                color,
+                1,
+                cv2.LINE_AA,
+            )
+        print(
+            f"Detected {len(slots)} slots "
+            f"({sum(s.synthetic for s in slots)} synthesized)."
+        )
     else:
         located = locate_cards(screen, args.names, args.expansion, cfg)
         for loc in located:
             b = loc.bbox
             cv2.rectangle(canvas, (b.x, b.y), (b.x2, b.y2), GREEN, 2)
-            cv2.putText(canvas, f"{loc.name} {loc.score:.2f}", (b.x + 3, b.y + 18),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, RED, 1, cv2.LINE_AA)
+            cv2.putText(
+                canvas,
+                f"{loc.name} {loc.score:.2f}",
+                (b.x + 3, b.y + 18),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                RED,
+                1,
+                cv2.LINE_AA,
+            )
         print(f"Located {len(located)} / {len(args.names)} cards.")
 
     cv2.imwrite(str(out_path), canvas)

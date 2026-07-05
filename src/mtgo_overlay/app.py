@@ -1320,9 +1320,7 @@ class AppController(QObject):
 
         box = QMessageBox()
         box.setWindowTitle("Update available")
-        box.setText(
-            f"Version v{info.version} is available (you have v{__version__})."
-        )
+        box.setText(f"Version v{info.version} is available (you have v{__version__}).")
         notes = info.body.strip()
         box.setInformativeText(
             (notes + "\n\n" if notes else "")

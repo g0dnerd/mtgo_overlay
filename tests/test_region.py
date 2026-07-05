@@ -1,4 +1,4 @@
-"""region.py — pure geometry helpers (now) + pixel detection (synthetic + real)."""
+"""region.py - pure geometry helpers (now) + pixel detection (synthetic + real)."""
 
 from __future__ import annotations
 

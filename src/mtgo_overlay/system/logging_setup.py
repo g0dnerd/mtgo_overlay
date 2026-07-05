@@ -53,7 +53,7 @@ def setup(level: int | None = None, *, to_file: bool = True) -> logging.Logger:
 
 def close_log_file() -> None:
     """Detach and close the app-log file handler so the underlying file can be
-    deleted — Windows holds an open log file locked."""
+    deleted - Windows holds an open log file locked."""
     logger = logging.getLogger(_LOGGER_NAME)
     for handler in list(logger.handlers):
         if isinstance(handler, logging.FileHandler):

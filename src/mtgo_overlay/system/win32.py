@@ -92,7 +92,7 @@ def set_dpi_awareness() -> None:
 def set_click_through(hwnd: int) -> None:
     """Make ``hwnd`` click-through, non-activating, off the taskbar/alt-tab.
 
-    Deliberately does NOT call ``SetLayeredWindowAttributes(LWA_ALPHA)`` — that
+    Deliberately does NOT call ``SetLayeredWindowAttributes(LWA_ALPHA)`` - that
     forces a uniform alpha and fights Qt's per-pixel ``WA_TranslucentBackground``
     compositing.
     """

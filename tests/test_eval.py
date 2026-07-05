@@ -1,4 +1,4 @@
-"""eval.py metrics — including duplicate card names in a pack."""
+"""eval.py metrics - including duplicate card names in a pack."""
 
 from __future__ import annotations
 

@@ -7,7 +7,7 @@ joined to its ``mtgo_id`` for the Goatbots feed) -> ``RatingsRepository.lookup``
 ``PricesRepository.lookup`` -> ``build_label_specs`` (``show_prices=True``) and
 paints with the overlay's shared painters
 (``compute_label_rect``/``paint_label`` + ``compute_price_rect``/``paint_price``),
-so the preview matches the live overlay and stays matched — no constants here.
+so the preview matches the live overlay and stays matched - no constants here.
 
     # real Goatbots prices for the matched printings (one price-feed download):
     uv run python tools/price_preview.py tests/fixtures/msh/pack1_pick1.png \
@@ -69,13 +69,13 @@ def _load_meta(image: Path, names_json: Path | None) -> dict:
     if not sidecar.exists():
         raise SystemExit(
             f"Missing card-names sidecar: {sidecar}. The tool needs the pack's "
-            f"card names (cards[].name) — see tests/fixtures/msh/pack1_pick1.json."
+            f"card names (cards[].name) - see tests/fixtures/msh/pack1_pick1.json."
         )
     return json.loads(sidecar.read_text(encoding="utf-8"))
 
 
 def _demo_prices(located) -> list[CardPrice]:
-    """A synthetic price per matched printing, cycling ``_DEMO_TIX`` — lets you see
+    """A synthetic price per matched printing, cycling ``_DEMO_TIX`` - lets you see
     the pill design without a live price fetch."""
     return [
         CardPrice(loc.printing_id, _DEMO_TIX[i % len(_DEMO_TIX)])
@@ -91,7 +91,9 @@ def main() -> int:
     ap.add_argument("--csv", type=Path, required=True, help="17lands card_ratings CSV")
     ap.add_argument("--format", dest="fmt", default="PremierDraft")
     ap.add_argument("--out", type=Path, default=None)
-    ap.add_argument("--names-json", type=Path, default=None, help="override sidecar path")
+    ap.add_argument(
+        "--names-json", type=Path, default=None, help="override sidecar path"
+    )
     ap.add_argument(
         "--min-tix",
         type=float,
@@ -179,7 +181,7 @@ def main() -> int:
     img.save(str(out_path))
     priced = sum(s.tix is not None for s in specs)
     print(
-        f"Wrote {out_path} — located {len(located)}/{len(names)} card(s), "
+        f"Wrote {out_path} - located {len(located)}/{len(names)} card(s), "
         f"{len(specs)} pill(s), {priced} price pill(s) "
         f"({'demo' if args.demo_prices else 'live'} prices, min {args.min_tix} tix)."
     )

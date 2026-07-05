@@ -2,7 +2,7 @@
 
 Lets you exercise the entire Windows path (window discovery, client capture,
 client->screen + DPI mapping, click-through, always-on-top, move/resize tracking)
-with NO real MTGO — just a screenshot you provide. Run it, then run the overlay
+with NO real MTGO - just a screenshot you provide. Run it, then run the overlay
 (`uv run python run.py`) and point it at this window.
 
   uv run python tools/fake_mtgo.py shot.png --geometry 1600x1000+200+100

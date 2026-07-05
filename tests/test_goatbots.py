@@ -1,4 +1,4 @@
-"""goatbots.py — parse the zipped price feed. Hermetic (no net) + gated live."""
+"""goatbots.py - parse the zipped price feed. Hermetic (no net) + gated live."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import os
 import zipfile
 
 import pytest
-import requests
 
 from mtgo_overlay.data import goatbots
 

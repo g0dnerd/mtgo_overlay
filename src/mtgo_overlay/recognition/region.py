@@ -173,7 +173,7 @@ def reconstruct_grid(
 
     MTGO lays the pack out left-aligned with a uniform column pitch; rows fill
     top-first so every row but the last holds ``C`` cards. Knowing the count lets
-    us solve for ``C`` from the widest detected row and place every cell — unlike
+    us solve for ``C`` from the widest detected row and place every cell - unlike
     :func:`fill_row_gaps`, which only bridges *interior* gaps and so loses cards
     missing from a row's end. Returns ``None`` when the detected geometry can't
     form a consistent grid, so the caller falls back to per-row filling.

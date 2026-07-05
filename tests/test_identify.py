@@ -1,4 +1,4 @@
-"""identify.py — the threshold-free assignment core (synthetic, no real art)."""
+"""identify.py - the threshold-free assignment core (synthetic, no real art)."""
 
 from __future__ import annotations
 

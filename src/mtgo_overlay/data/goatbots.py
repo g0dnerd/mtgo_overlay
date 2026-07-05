@@ -1,14 +1,11 @@
 """Goatbots MTGO price feed.
 
 Goatbots publishes its daily average sell (retail) prices once a day as a
-single zipped JSON keyed by Magic Online catalog id — the price MTGO players
+single zipped JSON keyed by Magic Online catalog id - the price MTGO players
 actually reference on goatbots.com, unlike Scryfall's Cardhoarder-sourced
 ``tix`` (which runs high and stale for freshly released draft sets). The feed
 covers *every* MTGO object in one file, so callers cache it once and look prices
 up by the ``mtgo_id`` Scryfall exposes per printing.
-
-Goatbots asks only that reusers link back to their homepage; the overlay does so
-in the tray menu and the price-pill caption.
 """
 
 from __future__ import annotations

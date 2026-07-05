@@ -4,13 +4,13 @@ render the exact pills the live overlay would draw onto a copy of the image.
 This wires `locate_cards` -> `RatingsRepository.lookup` -> `build_label_specs`
 (the same join the app uses) and paints with the overlay's shared painter
 (`compute_label_rect` + `paint_label`), so the preview matches the live overlay
-and stays matched — no constants are duplicated here.
+and stays matched - no constants are duplicated here.
 
     uv run python tools/preview_overlay.py tests/fixtures/msh/pack1_pick1.png \
         --expansion MSH --csv tests/fixtures/ratings/sample_card_ratings.csv
 
 Card names come from the fixture's sibling `<stem>.json` (`cards[].name`), the
-same schema as tests/fixtures/msh/pack1_pick1.json — `locate_cards` is closed-set
+same schema as tests/fixtures/msh/pack1_pick1.json - `locate_cards` is closed-set
 assignment and needs the pack's names. Output defaults to the git-ignored
 `label_previews/<stem>_overlay.png`.
 
@@ -56,7 +56,7 @@ def _load_meta(image: Path, names_json: Path | None) -> dict:
     if not sidecar.exists():
         raise SystemExit(
             f"Missing card-names sidecar: {sidecar}. The tool needs the pack's "
-            f"card names (cards[].name) — see tests/fixtures/msh/pack1_pick1.json."
+            f"card names (cards[].name) - see tests/fixtures/msh/pack1_pick1.json."
         )
     return json.loads(sidecar.read_text(encoding="utf-8"))
 
@@ -68,7 +68,9 @@ def main() -> int:
     ap.add_argument("--csv", type=Path, required=True, help="17lands card_ratings CSV")
     ap.add_argument("--format", dest="fmt", default="PremierDraft")
     ap.add_argument("--out", type=Path, default=None)
-    ap.add_argument("--names-json", type=Path, default=None, help="override sidecar path")
+    ap.add_argument(
+        "--names-json", type=Path, default=None, help="override sidecar path"
+    )
     args = ap.parse_args()
 
     logging_setup.setup(to_file=False)  # honors MTGO_OVERLAY_DEBUG for stage logs
@@ -118,7 +120,7 @@ def main() -> int:
     img.save(str(out_path))
     rated = sum(s.gih_wr is not None for s in specs)
     print(
-        f"Wrote {out_path} — located {len(located)}/{len(names)} card(s), "
+        f"Wrote {out_path} - located {len(located)}/{len(names)} card(s), "
         f"{len(specs)} pill(s) ({rated} rated, set distribution n={len(distribution)})."
     )
     return 0

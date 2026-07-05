@@ -1,4 +1,4 @@
-"""prices_repo.py — global Goatbots price cache: TTL, atomic write, lookup."""
+"""prices_repo.py - global Goatbots price cache: TTL, atomic write, lookup."""
 
 from __future__ import annotations
 
@@ -91,7 +91,9 @@ def test_lookup_without_cache_returns_none(tmp_path):
 
 def test_ensure_keeps_stale_cache_on_fetch_failure(tmp_path):
     clock = {"t": 1000.0}
-    repo = _repo(tmp_path, client=_StubFetcher({"90653": 8.45}), time_fn=lambda: clock["t"])
+    repo = _repo(
+        tmp_path, client=_StubFetcher({"90653": 8.45}), time_fn=lambda: clock["t"]
+    )
     repo.ensure()  # seed
     clock["t"] += 100 * 3600  # go stale
 

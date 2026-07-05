@@ -3,7 +3,7 @@
 Receives labels already in overlay-logical coordinates (the AppController maps
 capture-px -> logical) and pins to MTGO's client origin. Each GIH win rate is
 drawn as a tier-colored pill (red->green) anchored to the **bottom of the card
-art** — below the title bar (name + mana cost) and above the type line / rules
+art** - below the title bar (name + mana cost) and above the type line / rules
 text, so it never hides anything the drafter needs. Every offset is a fraction of
 the card box, so it survives any MTGO size / DPI.
 """
@@ -214,7 +214,7 @@ class OverlayWindow(QWidget):
         self.update()
 
     def set_notice(self, text: str | None) -> None:
-        """A caption shown in place of the citation — e.g. an embargo note when no
+        """A caption shown in place of the citation - e.g. an embargo note when no
         pills are drawn. ``None`` restores the default 17Lands citation."""
         self._notice = text
         self.update()

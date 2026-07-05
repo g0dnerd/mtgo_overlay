@@ -5,7 +5,7 @@ search (Scryfall paginates at 175/page, so ~2-4 requests cover any set) and
 indexed by card name. Set data is immutable once a set releases, so the index is
 cached indefinitely in ``<EXP>_variants.json``; after the one-time fetch every
 per-name lookup and the recognition hot path are fully offline. This deliberately
-avoids per-name searching (which scaled ~250 requests/set) — the few cheap,
+avoids per-name searching (which scaled ~250 requests/set) - the few cheap,
 indefinitely-cached searches stay well inside Scryfall's guidance.
 
 Scryfall asks for a descriptive User-Agent and an Accept header, and enforces
@@ -202,7 +202,7 @@ _INDEX_VERSION = 2
 def _load_set_index(expansion: str, cache_dir: Path) -> dict[str, list[dict]] | None:
     """The cached full-set index, or ``None`` if absent/partial/legacy.
 
-    A ``None`` return forces a refetch — only a complete index written by the
+    A ``None`` return forces a refetch - only a complete index written by the
     current version is trusted; an older one (missing ``mtgo_id``) is refetched.
     """
     path = _variants_path(expansion, cache_dir)
@@ -294,9 +294,7 @@ def booster_artwork_ids(
     return _lookup(index, name)
 
 
-def set_mtgo_ids(
-    expansion: str, *, cache_dir: Path | None = None
-) -> dict[str, int]:
+def set_mtgo_ids(expansion: str, *, cache_dir: Path | None = None) -> dict[str, int]:
     """``{scryfall_id: mtgo_id}`` for every printing in ``expansion`` with an MTGO
     id (cache-first, offline once the set is warmed).
 

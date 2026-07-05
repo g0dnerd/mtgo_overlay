@@ -13,14 +13,14 @@ The repo lives on the **WSL filesystem**, is **edited from WSL**, but the app
 
 - **WSL** runs only the headless test suite + recognition dev tools. Anything
   touching Win32 (`system/win32.py`, `capture/`, live overlay, tray, `run.py`'s
-  loop) raises `RuntimeError` or can't be exercised here — do not try to run the
+  loop) raises `RuntimeError` or can't be exercised here - do not try to run the
   app or `run.py`'s full loop in WSL.
 - **Windows** runs the real app and the PyInstaller build, via `uv` (also on PATH
   there), using a **separate env dir** so it doesn't clobber the WSL `.venv`:
   `$env:UV_PROJECT_ENVIRONMENT=".venv-win"`. `uv.lock` is cross-platform
   (`pywin32` resolves only on win32).
 
-`uv` is the only package manager — never pip/poetry.
+`uv` is the only package manager - never pip/poetry.
 
 ## Commands
 
@@ -71,7 +71,7 @@ threshold?" into a 1-to-1 assignment problem. `region.detect_slots` finds the gr
 (auto-Canny → **`RETR_LIST`** contours → robust modal-size cluster → lattice fit +
 gap synthesis), `identify` builds a score matrix (`matchTemplate` of each slot vs
 each name's Scryfall artworks) and solves it with `scipy.linear_sum_assignment`.
-There are **no absolute pixel constants and no 1920×1080 assumptions** — every
+There are **no absolute pixel constants and no 1920×1080 assumptions** - every
 value in `recognition/config.py` is a ratio/fraction, and all scale derives from
 the cards actually detected (MTGO's draft region + card size are user-resizable).
 
@@ -98,15 +98,15 @@ offline on the hot path. **Respect Scryfall's rate limit even when testing.**
   create a bare `QCoreApplication` (mixing the two segfaults widget tests). Render
   tests run under `QT_QPA_PLATFORM=offscreen`.
 - **Testability seams**: hard-to-test edges are injected so logic stays
-  WSL-testable — `pipeline.locate_cards(detect=…, templates_provider=…)`,
+  WSL-testable - `pipeline.locate_cards(detect=…, templates_provider=…)`,
   `WindowTracker(find_hwnd=…, get_rect=…)`, `RatingsRepository(client=…, time_fn=…)`.
   Prefer extending these over reaching for the real Win32/network path in a test.
 - **Recognition fixtures**: accuracy tests under `tests/fixtures/<set>/` auto-
   activate when a `*.png` + `*.json` ground-truth pair exists (see
-  `discover_screenshot_fixtures`). Ground truth is a **list** of `(name, bbox)` —
+  `discover_screenshot_fixtures`). Ground truth is a **list** of `(name, bbox)` -
   a pack can contain duplicate card names. Bootstrap new ones with
   `tools/propose_groundtruth.py`, then hand-correct.
-- **Log parser** (`draft/log_parser.py`) is a faithful port — behavior unchanged.
+- **Log parser** (`draft/log_parser.py`) is a faithful port - behavior unchanged.
   It assumes an **8-player pod** (12 fixed header lines) and derives the expansion
   from the last 3 chars of the filename before `.txt`.
 - Tests are hermetic (no network); the only networked tests are the two

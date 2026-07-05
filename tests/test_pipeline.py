@@ -1,4 +1,4 @@
-"""pipeline.py — wiring (synthetic, injected) + real screenshot (skip until ready)."""
+"""pipeline.py - wiring (synthetic, injected) + real screenshot (skip until ready)."""
 
 from __future__ import annotations
 

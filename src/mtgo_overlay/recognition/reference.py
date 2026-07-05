@@ -22,7 +22,7 @@ def prepare(
     """Grayscale + resize an image to ``size`` (canonical slot size).
 
     ``mode="gradient"`` returns a normalized Sobel magnitude instead of raw
-    grayscale — more robust to foil glare / color shifts, at some cost.
+    grayscale - more robust to foil glare / color shifts, at some cost.
     """
     if image.ndim == 3:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)

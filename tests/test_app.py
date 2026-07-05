@@ -154,7 +154,7 @@ def test_app_module_imports():
 
 def test_app_controller_constructs(qapp, tmp_path, monkeypatch):
     # Construction wires overlay/tracker/repo/signals (WSL-safe). We do NOT call
-    # start() — that polls Win32, which only exists on Windows.
+    # start() - that polls Win32, which only exists on Windows.
     monkeypatch.setenv("MTGO_OVERLAY_HOME", str(tmp_path))
     from mtgo_overlay.app import AppController
 
@@ -188,7 +188,7 @@ def _controller(qapp, tmp_path, monkeypatch):
 
 def test_pick_clears_labels_and_suppresses_recognition(qapp, tmp_path, monkeypatch):
     # After a pick the picked pack lingers in current_pack, so the controller must
-    # not render labels until a new pack arrives — even if a refocus/resize tries
+    # not render labels until a new pack arrives - even if a refocus/resize tries
     # to re-recognize, or an in-flight worker reports back.
     controller = _controller(qapp, tmp_path, monkeypatch)
     controller.log = _FakeLog(["picked"], pack=["Agent Phil Coulson"])
