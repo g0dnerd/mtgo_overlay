@@ -32,7 +32,7 @@ To respect those guidelines, live win rates for a just-released set are held bac
 
 ## Configuration
 
-Settings live in `%APPDATA%\MtgoOverlay\config.toml`. The wizard and tray menu write the common ones; you can also edit the file directly.
+Settings live in `%APPDATA%\MtgoOverlay\config.toml`. The wizard and tray menu set some common ones, but you can also edit the file directly.
 Caches and logs live under `%LOCALAPPDATA%\MtgoOverlay\`.
 
 | Key                   | Default          | Meaning                                                                                    |
